@@ -62,9 +62,7 @@ namespace xeditor_tools::picking
         return true;
     }
 
-    // Axis-aligned box, Center +/- HalfExtents (slab method). New for the Level Editor's physics/
-    // render entities - their rotation isn't simulated back yet (see xlionrender_system.h), so an AABB
-    // matches what's actually drawn today; revisit as an OBB once rotation is real.
+    // Axis-aligned box, Center +/- HalfExtents (slab method).
     inline bool RayAABBIntersect(const xmath::fvec3& Origin, const xmath::fvec3& Dir, const xmath::fvec3& Center, const xmath::fvec3& HalfExtents, float& OutT) noexcept
     {
         float TMin = 0.0f, TMax = std::numeric_limits<float>::max();
@@ -94,6 +92,19 @@ namespace xeditor_tools::picking
         return true;
     }
 
+
+    // Oriented box: Transform ray into local space (inverse Rotation about Center), then AABB slab
+    // with local HalfExtents. Matches a mesh drawn with setupSRT(Scale, Rotation, Position) where
+    // unit-mesh half-extents are 0.5 (pass HalfExtents = 0.5 * Scale).
+    inline bool RayOBBIntersect( const xmath::fvec3& Origin, const xmath::fvec3& Dir
+                               , const xmath::fvec3& Center, const xmath::fquat& Rotation
+                               , const xmath::fvec3& HalfExtents, float& OutT ) noexcept
+    {
+        const xmath::fquat InvR = Rotation.InverseCopy();
+        const xmath::fvec3 LocalOrigin = InvR.RotateVector(Origin - Center);
+        const xmath::fvec3 LocalDir    = InvR.RotateVector(Dir);
+        return RayAABBIntersect(LocalOrigin, LocalDir, xmath::fvec3::fromZero(), HalfExtents, OutT);
+    }
     // Accumulates the closest hit across a loop of candidates - the "T < OutT" bookkeeping every
     // PickXxx function above already repeats per-candidate, pulled out once.
     template< typename T_ID >
