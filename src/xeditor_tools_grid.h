@@ -58,6 +58,7 @@ namespace xeditor_tools
         static bool Ok(xgpu::device::error* pErr) noexcept;
 
         xgpu::buffer            m_GridVerts;
+        xgpu::buffer            m_GridIndices;  // identity ramp (0,1,2,3,4,5) - every draw call in this codebase binds an index buffer, even for a plain vertex-order list
         xgpu::buffer            m_GridUBO;
         xgpu::pipeline          m_GridPipeline;
         xgpu::pipeline_instance m_GridInstance;

@@ -73,6 +73,18 @@ namespace xeditor_tools
                 pV[0] = Verts[0]; pV[1] = Verts[1]; pV[2] = Verts[2];
                 pV[3] = Verts[0]; pV[4] = Verts[2]; pV[5] = Verts[3];
             });
+
+            // An identity-ramp index buffer - the vertex buffer above is already laid out in draw order,
+            // but this API's Draw() reads through whatever index buffer is currently bound (confirmed
+            // live: with none ever bound here, it drew through stale indices left over from an unrelated
+            // earlier draw call, rendering only one of the two triangles). Every other draw call in this
+            // codebase, even a plain vertex-order list, binds one for exactly this reason.
+            if (!Ok(Device.Create(m_GridIndices, { .m_Type = xgpu::buffer::type::INDEX, .m_EntryByteSize = sizeof(std::uint32_t), .m_EntryCount = 6 }))) return false;
+            (void)m_GridIndices.MemoryMap(0, 6, [&](void* pData)
+            {
+                auto* pIndex = static_cast<std::uint32_t*>(pData);
+                for (std::uint32_t i = 0; i < 6; ++i) pIndex[i] = i;
+            });
         }
 
         if (!Ok(Device.Create(m_GridUBO, { .m_Type = xgpu::buffer::type::UNIFORM, .m_Usage = xgpu::buffer::setup::usage::CPU_WRITE_GPU_READ, .m_EntryByteSize = sizeof(grid_uniform), .m_EntryCount = 10 }))) return false;
@@ -136,6 +148,7 @@ namespace xeditor_tools
         Uniform.m_ShadowL2C    = m_bShadow ? ClipToTextureSpace() * ShadowL2C * Uniform.m_L2W : xmath::fmat4::fromZero();
         Uniform.m_MajorGridDiv = 10.0f;
         CmdBuffer.setDynamicUBO(m_GridUBO, 0);
+        CmdBuffer.setBuffer(m_GridIndices);
         CmdBuffer.setBuffer(m_GridVerts);
         CmdBuffer.Draw(6);
     }
