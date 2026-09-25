@@ -9,4 +9,5 @@ DefineInterfaceComponent(xeditor_tools "dependencies/xcore"
   "src/xeditor_tools.cpp"
   "src/xeditor_tools_camera.h"
   "src/xeditor_tools_grid.h"
+  "src/xeditor_tools_picking.h"
 )
