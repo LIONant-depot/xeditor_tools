@@ -48,8 +48,8 @@ namespace xeditor_tools
             xmath::fvec3 Move(0, 0, 0);
             if (ImGui::IsKeyDown(ImGuiKey_W)) Move += m_View.getWorldZVector();
             if (ImGui::IsKeyDown(ImGuiKey_S)) Move -= m_View.getWorldZVector();
-            if (ImGui::IsKeyDown(ImGuiKey_D)) Move += m_View.getWorldXVector();
-            if (ImGui::IsKeyDown(ImGuiKey_A)) Move -= m_View.getWorldXVector();
+            if (ImGui::IsKeyDown(ImGuiKey_A)) Move += m_View.getWorldXVector();
+            if (ImGui::IsKeyDown(ImGuiKey_D)) Move -= m_View.getWorldXVector();
             if (ImGui::IsKeyDown(ImGuiKey_E)) Move += m_View.getWorldYVector();
             if (ImGui::IsKeyDown(ImGuiKey_Q)) Move -= m_View.getWorldYVector();
             if (Move.Length() > 0.0f) m_Target += Move.Normalize() * Speed;
