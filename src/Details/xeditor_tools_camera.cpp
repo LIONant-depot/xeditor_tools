@@ -2,15 +2,15 @@
 #include "dependencies/imgui/imgui.h"
 #include "dependencies/xGPU/source/tools/editors/xgpu_editor_viewport.h"
 
-// WASD/QE fly is deliberately NOT gated behind a held mouse button (no "hold right-click to fly" the
-// way Unreal/Unity ask for) - explicit request: these keys are standard enough across games and
-// engines that treating them as special (requiring a modifier first) just adds friction. It is an
-// EXTENSION of the existing orbit camera, not a replacement or a second mode to switch into: WASD/QE
-// shift m_Target by a world-space vector, exactly the same trick middle-mouse-drag already uses for
-// panning (see below) - Distance and Angles never change, so rotate/pan/zoom keep behaving exactly as
-// they did before flying anywhere. The camera's position is always Target + sphericalOffset(Distance,
-// Angles); shifting Target by a delta moves that whole implied rig by the same delta, which is exactly
-// what "fly forward" means here.
+// WASD/QE fly is gated behind the right mouse button, Unity's Scene-view convention (direct user
+// request - a prior version of this file deliberately left it ungated, but that meant W also always
+// doubled as whatever else a host editor bound to the W key, e.g. the Level Editor's own Move-tool
+// hotkey, firing both at once on every keypress). It is an EXTENSION of the existing orbit camera, not
+// a replacement or a second mode to switch into: WASD/QE shift m_Target by a world-space vector,
+// exactly the same trick middle-mouse-drag already uses for panning (see below) - Distance and Angles
+// never change, so rotate/pan/zoom keep behaving exactly as they did before flying anywhere. The
+// camera's position is always Target + sphericalOffset(Distance, Angles); shifting Target by a delta
+// moves that whole implied rig by the same delta, which is exactly what "fly forward" means here.
 namespace xeditor_tools
 {
     void camera::HandleInput(void) noexcept
@@ -38,11 +38,9 @@ namespace xeditor_tools
             }
         }
 
-        // Not gated on WantTextInput's usual "don't steal keys from a text box" check alone - also
-        // skipped while actively dragging/orbiting so a right-drag-turn that happens to cross W/A/S/D
-        // on the keyboard doesn't also translate the camera; flying and orbiting can still compose
-        // across separate frames/inputs, just not fight over the same frame's mouse-drag intent.
-        if (!io.WantTextInput)
+        // Right mouse button held = flying (Unity convention, see this file's top comment), plus the
+        // usual "don't steal keys from a text box" WantTextInput check.
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && !io.WantTextInput)
         {
             const float Speed = m_FlySpeed * std::max(m_Distance, 0.1f) * io.DeltaTime;
             xmath::fvec3 Move(0, 0, 0);
