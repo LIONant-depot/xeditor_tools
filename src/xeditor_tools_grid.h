@@ -12,7 +12,7 @@
 // data and shader), so a consumer draws its own geometry into m_ShadowPass with its own pipeline, the
 // same shape every editor already used - this class only owns the shared shadow render target itself
 // and the ground plane that samples it.
-#include "dependencies/xGPU/source/xgpu.h"
+#include "dependencies/xGPU/source/xGPU.h"
 
 namespace xeditor_tools
 {

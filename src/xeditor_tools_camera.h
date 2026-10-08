@@ -8,7 +8,7 @@
 // middle-drag pans, wheel zooms - unchanged from every editor's own prior implementation - extended
 // with an always-on WASD/QE fly (see xeditor_tools_camera.cpp's own top comment for why it is not
 // gated behind a held mouse button, and how it composes with orbit instead of replacing it).
-#include "dependencies/xGPU/source/tools/xgpu_view.h"
+#include "dependencies/xGPU/source/Tools/xgpu_view.h"
 
 struct ImVec2;
 

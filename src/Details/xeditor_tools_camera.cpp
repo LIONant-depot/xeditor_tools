@@ -1,6 +1,6 @@
 #include "../xeditor_tools_camera.h"
 #include "dependencies/imgui/imgui.h"
-#include "dependencies/xGPU/source/tools/editors/xgpu_editor_viewport.h"
+#include "dependencies/xGPU/source/Tools/editors/xgpu_editor_viewport.h"
 
 // WASD/QE fly is gated behind the right mouse button, Unity's Scene-view convention (direct user
 // request - a prior version of this file deliberately left it ungated, but that meant W also always
