@@ -18,7 +18,7 @@ namespace xeditor_tools
     {
     public:
         xgpu::tools::view   m_View;
-        xmath::radian3      m_Angles;
+        xmath::radian3      m_Angles    = {};                     // zero: the default constructor leaves it as it was in memory (a NaN there asserted in LookAt, sometimes)
         float               m_Distance  = -1;                     // -1 until the first frame framed the subject
         xmath::fvec3        m_Target    = xmath::fvec3(0, 0, 0);
         bool                m_bReframe  = true;
