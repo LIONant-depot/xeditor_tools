@@ -65,10 +65,6 @@ namespace xeditor_tools
 
         bool Project(const camera_rig& Rig, const xmath::fvec3& P, const ImVec2& Min, const ImVec2& Size, ImVec2& Out) noexcept
         {
-            // The host sets the viewport while it renders (a callback that runs after this overlay): the first frame of a panel, or one that was not
-            // rendered yet, has none and getViewport asserts. The overlay's own rectangle is what the host's will be (the host overwrites it)
-            if (Size.x < 1.0f || Size.y < 1.0f) return false;
-            Rig.m_View.setViewport({ 0, 0, static_cast<int>(Size.x), static_cast<int>(Size.y) });
             // NOT "1 - NDC.y": the projection already flips Y for this engine's Vulkan convention (see xskeleton's RenderLabels)
             const xmath::fvec4 Clip = Rig.m_View.getW2C() * xmath::fvec4(P, 1.0f);
             if (Clip.m_W <= 1.0e-4f) return false;
@@ -217,6 +213,13 @@ namespace xeditor_tools
         const ImVec2 Size(Max.x - Min.x, Max.y - Min.y);
         if (Size.x < 80.0f || Size.y < 60.0f) return;
 
+        // The host sets the viewport of its view while it renders (a callback that runs after this overlay): the first frame of a panel, or one that
+        // was not rendered yet, has none and getViewport asserts. The overlay projects with a copy that has its own rectangle: the host's view is
+        // not touched (the click-pick of the same frame builds its ray from it, in screen coordinates)
+        xgpu::tools::view ProjView = Rig.m_View;
+        ProjView.setViewport({ 0, 0, static_cast<int>(Size.x), static_cast<int>(Size.y) });
+        const camera_rig ProjRig{ Rig.m_State, ProjView, Rig.m_Angles, Rig.m_Distance, Rig.m_Target };
+
         auto&        S    = Rig.m_State;
         const double Now  = ImGui::GetTime();
         auto*        pDraw = ImGui::GetWindowDrawList();
@@ -230,7 +233,7 @@ namespace xeditor_tools
         if (!bFly && Rig.m_Distance > 0.0f)
         {
             ImVec2 Center;
-            if (Project(Rig, Rig.m_Target, Min, Size, Center))
+            if (Project(ProjRig, Rig.m_Target, Min, Size, Center))
             {
                 // The globe has a size in the WORLD, a round one (1, 2, 5 x 10^n meters): the biggest that fits in 64 pixels. Going closer makes it grow, until
                 // the next round size takes over - like the scale bar of a map. The distance to the target is written under it.
@@ -240,7 +243,7 @@ namespace xeditor_tools
                     {
                         const float R = Mantissa * std::pow(10.0f, static_cast<float>(Exp));
                         ImVec2 Edge;
-                        if (!Project(Rig, Rig.m_Target + Rig.m_View.getWorldXVector() * R, Min, Size, Edge)) continue;
+                        if (!Project(ProjRig, Rig.m_Target + Rig.m_View.getWorldXVector() * R, Min, Size, Edge)) continue;
                         const float Px = std::sqrt((Edge.x - Center.x) * (Edge.x - Center.x) + (Edge.y - Center.y) * (Edge.y - Center.y));
                         if (Px <= 64.0f && Px >= 10.0f) { WorldRadius = R; Radius = Px; break; }
                     }
@@ -268,7 +271,7 @@ namespace xeditor_tools
                     {
                         const float a = 6.2831853f * static_cast<float>(i) / static_cast<float>(N), c = std::cos(a) * WorldRadius, s = std::sin(a) * WorldRadius;
                         const xmath::fvec3 P = Axis == 0 ? Rig.m_Target + xmath::fvec3(0, c, s) : Axis == 1 ? Rig.m_Target + xmath::fvec3(c, 0, s) : Rig.m_Target + xmath::fvec3(c, s, 0);
-                        if (Project(Rig, P, Min, Size, Points[Count])) ++Count;
+                        if (Project(ProjRig, P, Min, Size, Points[Count])) ++Count;
                     }
                     if (Count == N) pDraw->AddPolyline(Points, N, Alpha(Colors[Axis], 0.85f * A), ImDrawFlags_Closed, 2.0f);
                 }
