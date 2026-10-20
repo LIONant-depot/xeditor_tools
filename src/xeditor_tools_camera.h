@@ -32,6 +32,9 @@ namespace xeditor_tools
         bool        m_bSubject      = false;
         float       m_SubjectRadius = 0.0f;         // its size: the orbit camera does not come closer to its target than a tenth of it (0: unknown, half a meter)
         xmath::fvec3 m_Velocity     = xmath::fvec3(0, 0, 0);   // meters per second of the rig (W A S D Q E speed up and slow down: a little momentum)
+        float       m_TurnPitchLeft = 0.0f;         // what the right drag asked (radians) and the angles have not done yet: the turn glides like the zoom
+        float       m_TurnYawLeft   = 0.0f;
+        xmath::fvec3 m_SlideLeft    = xmath::fvec3(0, 0, 0);   // what the middle drag asked (world meters) and the target has not done yet
         float       m_ZoomLeft      = 0.0f;         // ORBIT: what the wheel asked and the distance has not done yet (log of a ratio): the zoom glides
         float       m_LastFovDeg    = 0.0f;         // the field of view the last frame had (0: none yet)
         float       m_FovDeg        = 45.0f;        // the vertical field of view, in degrees (the camera sets it on its view every frame: the toolbar has the slider)

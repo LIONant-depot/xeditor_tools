@@ -116,6 +116,28 @@ namespace xeditor_tools
             if (S.m_Velocity.Length() > 1.0e-4f * std::max(S.m_Speed, 0.1f)) { Rig.m_Target += S.m_Velocity * Dt; S.m_Active = Now; }
             else                                                              S.m_Velocity = xmath::fvec3(0, 0, 0);
 
+            // The turn and the slide of the mouse: the drag is a low pass (a few frames), so the view eases in and keeps going a moment after the mouse stops
+            if (std::fabs(S.m_TurnPitchLeft) > 1.0e-5f || std::fabs(S.m_TurnYawLeft) > 1.0e-5f)
+            {
+                const float Ease = 1.0f - std::exp(-Dt / 0.06f);
+                const xmath::fvec3 Eye = Rig.m_Target + EyeOffset(Rig.m_Angles, std::max(Rig.m_Distance, 0.0f));
+                const float P = S.m_TurnPitchLeft * Ease, Y = S.m_TurnYawLeft * Ease;
+                S.m_TurnPitchLeft -= P; S.m_TurnYawLeft -= Y;
+                Rig.m_Angles.m_Pitch.m_Value += P;
+                Rig.m_Angles.m_Yaw.m_Value   += Y;
+                if (S.m_Mode == camera_mode::FLY && Rig.m_Distance > 0.0f) Rig.m_Target = Eye - EyeOffset(Rig.m_Angles, Rig.m_Distance);      // the eye stays where it was
+                S.m_Active = Now;
+            }
+            else { S.m_TurnPitchLeft = 0.0f; S.m_TurnYawLeft = 0.0f; }
+            if (S.m_SlideLeft.Length() > 1.0e-6f)
+            {
+                const xmath::fvec3 Step = S.m_SlideLeft * (1.0f - std::exp(-Dt / 0.06f));
+                S.m_SlideLeft -= Step;
+                Rig.m_Target  += Step;
+                S.m_Active     = Now;
+            }
+            else S.m_SlideLeft = xmath::fvec3(0, 0, 0);
+
             if (std::fabs(S.m_ZoomLeft) > 1.0e-4f && Rig.m_Distance > 0.0f)
             {
                 const float Step = S.m_ZoomLeft * (1.0f - std::exp(-Dt / 0.07f));
@@ -147,11 +169,9 @@ namespace xeditor_tools
         // Turn: the orbit moves the eye around the target; the fly turns where it is (the target moves so that the eye does not)
         if (bRMB && (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f))
         {
-            const xmath::fvec3 Eye = Rig.m_Target + EyeOffset(Rig.m_Angles, std::max(Rig.m_Distance, 0.0f));
             const float Turn = bFly ? 0.0028f : 0.01f;          // radians per pixel: the fly camera turns where it is, the whole view swings, so it is gentler
-            Rig.m_Angles.m_Pitch.m_Value -= Turn * io.MouseDelta.y;
-            Rig.m_Angles.m_Yaw.m_Value   -= Turn * io.MouseDelta.x;
-            if (bFly && Rig.m_Distance > 0.0f) Rig.m_Target = Eye - EyeOffset(Rig.m_Angles, Rig.m_Distance);
+            S.m_TurnPitchLeft -= Turn * io.MouseDelta.y;        // (Glide turns it, a little at a time)
+            S.m_TurnYawLeft   -= Turn * io.MouseDelta.x;
             S.m_Active = Now;
         }
 
@@ -161,8 +181,8 @@ namespace xeditor_tools
             // Orbit: the point under the mouse follows it (a pixel is the world size of a pixel at the target's depth); Fly: at the fly speed
             const float Height = std::max(ImGui::GetItemRectSize().y, 1.0f);
             const float Step   = bFly ? S.m_Speed * 0.002f : 2.0f * std::max(Rig.m_Distance, 0.0f) * std::tan(S.m_FovDeg * 0.0087266462599716f) / Height;
-            Rig.m_Target += Rig.m_View.getWorldYVector() * (Step * io.MouseDelta.y);
-            Rig.m_Target += Rig.m_View.getWorldXVector() * (Step * io.MouseDelta.x);
+            S.m_SlideLeft += Rig.m_View.getWorldYVector() * (Step * io.MouseDelta.y);
+            S.m_SlideLeft += Rig.m_View.getWorldXVector() * (Step * io.MouseDelta.x);
             S.m_Active = Now;
         }
 
