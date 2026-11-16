@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "../xeditor_tools_camera.h"
 #include "dependencies/imgui/imgui.h"
 #include "dependencies/xGPU/source/Tools/editors/xgpu_editor_viewport.h"
@@ -110,7 +111,13 @@ namespace xeditor_tools
         xmath::fvec3 Desired(0, 0, 0);
         auto Glide = [&]
         {
-            const float Dt = std::min(io.DeltaTime, 0.1f);
+            // (C22: a moving camera's step a frame is speed x the frame time; the frame time of ONE frame wobbles +-25 %, and the image juddered
+            // while moving - TAA or not. Averaged over a few frames (a hitch, over 3 x the average, is taken as is: no lag after a stall))
+            const float Raw = std::min(io.DeltaTime, 0.1f);
+            if (S.m_SmoothDt <= 0.0f || Raw > 3.0f * S.m_SmoothDt) S.m_SmoothDt = Raw;
+            else                                                   S.m_SmoothDt += (Raw - S.m_SmoothDt) * 0.15f;
+            static const bool s_bRawDt = std::getenv("XEDITOR_CAMERA_SMOOTH_DT") == nullptr;      // (C22 diagnostic: XEDITOR_CAMERA_SMOOTH_DT=1 the averaged frame time; the raw one by default until it is proven)
+            const float Dt = s_bRawDt ? Raw : S.m_SmoothDt;
             const float Tau = Desired.Length() > 0.0f ? 0.28f : 0.12f;        // it takes its time to pick up speed, and stops a little faster
             S.m_Velocity += (Desired - S.m_Velocity) * (1.0f - std::exp(-Dt / Tau));
             if (S.m_Velocity.Length() > 1.0e-4f * std::max(S.m_Speed, 0.1f)) { Rig.m_Target += S.m_Velocity * Dt; S.m_Active = Now; }

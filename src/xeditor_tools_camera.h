@@ -44,6 +44,7 @@ namespace xeditor_tools
         bool        m_bFrame        = false;        // set by F in FLY: the host frames its subject (the center of its bounding box) and the camera is in ORBIT around it
         double      m_ZoomTime      = -100.0;       // ImGui time of the last wheel step in ORBIT (the target shows which way the camera went)
         float       m_ZoomDir       = 0.0f;         // +1: closer, -1: farther
+        float       m_SmoothDt      = 0.0f;         // the frame time the motion uses: ImGui's DeltaTime averaged over a few frames (C22: the raw one wobbles frame to frame, the camera's steps with it - a judder)
         double      m_Active        = -100.0;       // ImGui time the user last turned / moved / zoomed it (the target is drawn bright for a moment after)
 
         // F (and the mode button): ORBIT goes to FLY; FLY frames the subject and goes to ORBIT around it
