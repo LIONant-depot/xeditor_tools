@@ -37,6 +37,7 @@ namespace xeditor_tools
         xmath::fvec3 m_SlideLeft    = xmath::fvec3(0, 0, 0);   // what the middle drag asked (world meters) and the target has not done yet
         float       m_ZoomLeft      = 0.0f;         // ORBIT: what the wheel asked and the distance has not done yet (log of a ratio): the zoom glides
         float       m_LastFovDeg    = 0.0f;         // the field of view the last frame had (0: none yet)
+        bool        m_bHideOverlay  = false;        // the host hides the target globe and its distance (a video being recorded from the view)
         float       m_FovDeg        = 45.0f;        // the vertical field of view, in degrees (the camera sets it on its view every frame: the toolbar has the slider)
         float       m_SpeedFrom     = 5.0f;         // the speed before the last wheel step (the HUD shows the change)
         double      m_SpeedChanged  = -100.0;       // ImGui time of the last wheel step

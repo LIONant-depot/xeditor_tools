@@ -238,7 +238,7 @@ namespace xeditor_tools
         const ImVec2 Min  = ImGui::GetItemRectMin();
         const ImVec2 Max  = ImGui::GetItemRectMax();
         const ImVec2 Size(Max.x - Min.x, Max.y - Min.y);
-        if (Size.x < 80.0f || Size.y < 60.0f) return;
+        if (Size.x < 80.0f || Size.y < 60.0f || Rig.m_State.m_bHideOverlay) return;
 
         // The host sets the viewport of its view while it renders (a callback that runs after this overlay): the first frame of a panel, or one that
         // was not rendered yet, has none and getViewport asserts. The overlay projects with a copy that has its own rectangle: the host's view is
