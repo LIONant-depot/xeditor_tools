@@ -139,6 +139,7 @@ namespace xeditor_tools
     void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset) noexcept
     {
         if (!m_bReady) return;
+        if (CameraPos.m_Y < YOffset) return;        // front face only: from below the ground there is no grid (Tomas 2026-11-16)
 
         CmdBuffer.setPipelineInstance(m_GridInstance);
         auto& Uniform = m_GridUBO.allocEntry<grid_uniform>();
