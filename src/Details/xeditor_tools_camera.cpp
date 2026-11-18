@@ -116,7 +116,13 @@ namespace xeditor_tools
             const float Raw = std::min(io.DeltaTime, 0.1f);
             if (S.m_SmoothDt <= 0.0f || Raw > 3.0f * S.m_SmoothDt) S.m_SmoothDt = Raw;
             else                                                   S.m_SmoothDt += (Raw - S.m_SmoothDt) * 0.15f;
-            static const bool s_bRawDt = std::getenv("XEDITOR_CAMERA_SMOOTH_DT") == nullptr;      // (C22 diagnostic: XEDITOR_CAMERA_SMOOTH_DT=1 the averaged frame time; the raw one by default until it is proven)
+            static const bool s_bRawDt = [] { char* p = nullptr;        // (_dupenv_s on MSVC: std::getenv is C4996 there)
+#if defined(_MSC_VER)
+                std::size_t n = 0; const bool bSet = _dupenv_s(&p, &n, "XEDITOR_CAMERA_SMOOTH_DT") == 0 && p; std::free(p);
+#else
+                p = std::getenv("XEDITOR_CAMERA_SMOOTH_DT"); const bool bSet = p != nullptr;
+#endif
+                return !bSet; }();      // (C22 diagnostic: XEDITOR_CAMERA_SMOOTH_DT=1 the averaged frame time; the raw one by default until it is proven)
             const float Dt = s_bRawDt ? Raw : S.m_SmoothDt;
             const float Tau = Desired.Length() > 0.0f ? 0.28f : 0.12f;        // it takes its time to pick up speed, and stops a little faster
             S.m_Velocity += (Desired - S.m_Velocity) * (1.0f - std::exp(-Dt / Tau));
