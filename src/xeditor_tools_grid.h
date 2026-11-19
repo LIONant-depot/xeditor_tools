@@ -24,10 +24,10 @@ namespace xeditor_tools
         xgpu::texture       m_White;        // 1x1 white texture, handy for anything that needs a default
         bool                m_bReady        = false;
         bool                m_bShadow       = false;
-        float               m_FillAlpha     = 1.0f;     // the grey fill's opacity: 0 shows what is below the ground, the lines stay
-        float               m_LineHalo      = 0.0f;     // 0..1: a light outline around the dark lines, so they read on surfaces of their own colour;
-                                                        // off by default: over the grid's own grey it only washes the lines out (Tomas 07:38Z)
-        float               m_Rise          = 0.01f;    // metres: a surface this close to the plane counts as on it (lines shown, fill hidden); a floor saved
+        float               m_FillAlpha     = 0.57f;    // the grey fill's opacity: 0 shows what is below the ground, the lines stay
+        float               m_LineHalo      = 0.11f;    // 0..1: a light outline around the dark lines, so they read on surfaces of their own colour;
+                                                        // defaults (fill .57, outline .11, 1.3 cm): Tomas 2026-11-19 14:00Z, his tuned values
+        float               m_Rise          = 0.013f;   // metres: a surface this close to the plane counts as on it (lines shown, fill hidden); a floor saved
                                                         // 6 mm up (JointTest) hid the lines near and showed them far with any per-pixel slack
         xgpu::device*       m_pDevice       = nullptr;
 
