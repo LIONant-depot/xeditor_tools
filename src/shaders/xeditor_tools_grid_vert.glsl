@@ -51,7 +51,9 @@ void main()
         }
         else
         {
-            const float k = clamp(uniforms.Rise / max(Eye.y - worldPos.y, 1e-4), 0.0, 0.5);
+            // at most 2 % of the eye's height: close to the ground a fixed 1 cm band is a big strip on the screen (lines on the base of
+            // whatever stands there - Tomas 09:11Z, "a strange offset" up close); 1 cm from 50 cm up, 2 mm from 10 cm
+            const float k = clamp(uniforms.Rise / max(Eye.y - worldPos.y, 1e-4), 0.0, 0.02);
             depthPos = Eye + (worldPos - Eye) * (1.0 - Side * k);
         }
     }
