@@ -25,6 +25,8 @@ namespace xeditor_tools
         float           m_MajorGridDiv = 10.0f;
         float           m_Pass         = 0.0f;      // 0 the fill, 1 the lines (the shaders' Pass)
         float           m_FillAlpha    = 1.0f;
+        float           m_Rise         = 0.0f;      // grid::m_Rise
+        float           m_JitterPx[2]  = { 0, 0 };
     };
 
     bool grid::Ok(xgpu::device::error* pErr) noexcept
@@ -111,18 +113,10 @@ namespace xeditor_tools
             auto Blend = xgpu::pipeline::blend::getAlphaOriginal();
             Blend.m_AlphaSrcFactor = xgpu::pipeline::blend::factor::ONE;
             Blend.m_AlphaDstFactor = xgpu::pipeline::blend::factor::ONE_MINUS_SRC_ALPHA;
-            // No z-fighting with what lies on the ground plane (a floor at y = 0, a foot on it): the fill is drawn a hair BEHIND the plane and the
-            // lines a hair IN FRONT of it (two pipelines, a depth bias each way), so a coplanar surface always hides the fill and always shows the
-            // lines. Slope-scaled: the scene's depth is drawn with the TAA jitter (up to half a pixel each way), the grid without (lines must not
-            // shimmer), so the two depths of one plane differ by up to the depth's own slope across a pixel - a fixed nudge lost at grazing angles
+            // Two pipelines, the same state: [0] the fill, [1] the lines (the shaders place each a hair off the plane: no z-fighting, see them)
             for (int i = 0; i < 2; ++i)
-            {
-                const float Sign = i == 0 ? 1.0f : -1.0f;
                 if (!Ok(Device.Create(m_GridPipeline[i], xgpu::pipeline::setup{ .m_VertexDescriptor = m_GridVD, .m_Shaders = Shaders, .m_UniformBinds = Binds, .m_Samplers = Samplers
-                    , .m_Primitive = { .m_Cull = xgpu::pipeline::primitive::cull::NONE }
-                    , .m_DepthStencil = { .m_DepthBiasConstantFactor = Sign * 64.0f, .m_DepthBiasSlopeFactor = Sign * 2.0f, .m_bDepthWriteEnable = false, .m_bDepthBiasEnable = true }
-                    , .m_Blend = Blend }))) return false;
-            }
+                    , .m_Primitive = { .m_Cull = xgpu::pipeline::primitive::cull::NONE }, .m_DepthStencil = { .m_bDepthWriteEnable = false }, .m_Blend = Blend }))) return false;
 
             if (bShadow)
             {
@@ -154,7 +148,7 @@ namespace xeditor_tools
         m_pDevice->Destroy(std::move(m_White));
     }
 
-    void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset) noexcept
+    void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset, xmath::fvec2 JitterPx) noexcept
     {
         if (!m_bReady) return;
         if (CameraPos.m_Y < YOffset) return;        // front face only: from below the ground there is no grid (Tomas 2026-11-16)
@@ -168,6 +162,8 @@ namespace xeditor_tools
         auto& Uniform = m_GridUBO.allocEntry<grid_uniform>();
         Uniform.m_Pass         = float(Pass);
         Uniform.m_FillAlpha    = std::clamp(m_FillAlpha, 0.0f, 1.0f);
+        Uniform.m_Rise         = m_Rise;
+        Uniform.m_JitterPx[0]  = JitterPx.m_X; Uniform.m_JitterPx[1] = JitterPx.m_Y;
         Uniform.m_WorldSpaceCameraPos = CameraPos;
         Uniform.m_L2W          = xmath::fmat4(xmath::fvec3(100.f, 100.0f, 1.f), xmath::radian3(-90_xdeg, 0_xdeg, 0_xdeg), xmath::fvec3(0, YOffset, 0));
         Uniform.m_W2C          = W2C;

@@ -25,6 +25,8 @@ namespace xeditor_tools
         bool                m_bReady        = false;
         bool                m_bShadow       = false;
         float               m_FillAlpha     = 1.0f;     // the grey fill's opacity: 0 shows what is below the ground, the lines stay
+        float               m_Rise          = 0.01f;    // metres: a surface this close to the plane counts as on it (lines shown, fill hidden); a floor saved
+                                                        // 6 mm up (JointTest) hid the lines near and showed them far with any per-pixel slack
         xgpu::device*       m_pDevice       = nullptr;
 
         bool Init(xgpu::device& Device, bool bShadow) noexcept;
@@ -39,7 +41,9 @@ namespace xeditor_tools
         // world-space-to-the-light's-clip-space (pass xmath::fmat4::fromZero() for "no shadow" - the
         // shader reads an all-zero matrix as "always lit", the same convention every shadow-casting
         // editor already used).
-        void Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset = 0.0f) noexcept;
+        void Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset = 0.0f, xmath::fvec2 JitterPx = { 0.0f, 0.0f }) noexcept;
+        // JitterPx: the TAA jitter, in pixels, of the depth the grid is tested against (xlionrender's OverlayJitter times half the view's size);
+        // zero for a depth drawn without one
 
         // Clip space to shadow-texture space - the remap every shadow matrix fed to a shader goes
         // through. Shared here since every shadow-casting editor already needed the identical helper.

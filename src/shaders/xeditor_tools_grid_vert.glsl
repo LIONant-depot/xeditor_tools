@@ -16,6 +16,8 @@ layout(set = 2, binding = 0) uniform Uniforms
     float   MajorGridDiv;
     float   Pass;               // 0: the fill (pushed behind the ground plane), 1: the lines (pulled in front of it) - grid::Draw draws both
     float   FillAlpha;          // the fill's opacity: 0 the lines alone, what is below the grid shows through
+    float   Rise;               // metres: the lines are depth-tested as the plane Rise above, the fill as Rise below (grid.cpp)
+    vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
 } uniforms;
 
 layout(location = 0) in vec3 inPosition;
@@ -31,7 +33,28 @@ void main()
     vec4 worldPos4 = uniforms.L2W * vec4(inPosition, 1.0);
     vec3 worldPos = worldPos4.xyz;
 
-    gl_Position  = uniforms.W2C * worldPos4;      // (the fill behind the plane, the lines in front: a depth bias in each pass's pipeline, grid.cpp)
+    // Depth: the lines as the plane Rise metres ABOVE, the fill Rise BELOW, so a surface within Rise of the plane always shows the lines and
+    // hides the fill (a floor at y 0, a foot on it). A scale about the eye: no pixel moves, the UVs stay exact, and the scaled plane is the
+    // parallel plane at the eye's height times the scale. Ortho: along the view axis. (The fragment shader matches the scene's TAA jitter)
+    const float Side = uniforms.Pass < 0.5 ? -1.0 : 1.0;
+    vec3 depthPos = worldPos;
+    {
+        vec4 r3 = vec4(uniforms.W2C[0][3], uniforms.W2C[1][3], uniforms.W2C[2][3], uniforms.W2C[3][3]);
+        const bool bOrtho = length(r3.xyz) < 0.0001 && abs(r3.w - 1.0) < 0.0001;
+        const vec3 Eye    = uniforms.WorldSpaceCameraPos.xyz;
+        if (bOrtho)
+        {
+            const vec3 F = normalize(vec3(uniforms.W2C[0][2], uniforms.W2C[1][2], uniforms.W2C[2][2]));
+            const vec3 ToEye = -F * sign(dot(worldPos - Eye, F));       // (the view axis, toward the eye: its y is how much a step along it rises)
+            depthPos += ToEye * (Side * uniforms.Rise / max(abs(ToEye.y), 0.05));
+        }
+        else
+        {
+            const float k = clamp(uniforms.Rise / max(Eye.y - worldPos.y, 1e-4), 0.0, 0.5);
+            depthPos = Eye + (worldPos - Eye) * (1.0 - Side * k);
+        }
+    }
+    gl_Position  = uniforms.W2C * vec4(depthPos, 1.0);
     outShadowPos = uniforms.ShadowL2C * vec4(inPosition, 1.0);
 
     // Assume WorldUV = true

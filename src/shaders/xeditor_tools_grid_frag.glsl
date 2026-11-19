@@ -37,6 +37,8 @@ layout(set = 2, binding = 0) uniform Uniforms
     float   MajorGridDiv;
     float   Pass;               // 0: the fill (pushed behind the ground plane), 1: the lines (pulled in front of it) - grid::Draw draws both
     float   FillAlpha;          // the fill's opacity: 0 the lines alone, what is below the grid shows through
+    float   Rise;               // metres: the lines are depth-tested as the plane Rise above, the fill as Rise below (grid.cpp)
+    vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
 } uniforms;
 
 layout(location = 0) in vec2 inUV;
@@ -303,6 +305,14 @@ float ShadowPCF(in const vec4 UVProjection)
 void main()
 {
     // The fill pass: the plain ground colour at FillAlpha; the lines pass: the lines with their own coverage (grid::Draw, two draws)
+    // The scene's depth was drawn jittered (TAA), the grid is not (its lines must not shimmer): the depth this pixel holds is the scene's
+    // surface JitterPx away. A plane's depth is linear on the screen, so the grid's own depth there is exact - the same point, compared with
+    // the same sample: a coplanar floor never fights at any distance or angle (derivatives before any discard)
+    // Plus a guard for the depth's own rounding: half a pixel of its slope and 8 steps of a float near 1 (the far plane's precision), the
+    // fill behind, the lines in front - the world-sized separation is the vertex shader's Rise
+    const float Dx = dFdx(gl_FragCoord.z), Dy = dFdy(gl_FragCoord.z);
+    const float Guard = 0.5 * max(abs(Dx), abs(Dy)) + 8.0 / 16777216.0;
+    gl_FragDepth = gl_FragCoord.z - Dx * uniforms.JitterPx.x - Dy * uniforms.JitterPx.y + (uniforms.Pass < 0.5 ? Guard : -Guard);
     const bool  bFill           = uniforms.Pass < 0.5;
     const vec4  DiffuseColor    = bFill ? vec4(BaseColor.rgb * BaseColor.rgb, uniforms.FillAlpha) : Grid();
     if (DiffuseColor.a <= 0.002) discard;
