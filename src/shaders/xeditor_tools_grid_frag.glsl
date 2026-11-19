@@ -199,7 +199,12 @@ vec4 Grid()
                           + (1.0 - smoothstep((lineWidthB + HaloPx - 1.5) * lineAA_yB, (lineWidthB + HaloPx + 1.5) * lineAA_yB, gridUVB.y)), 0.0, 1.0) * lineFadeB;
     const float h2C = clamp((1.0 - smoothstep((lineWidthC + HaloPx - 1.5) * lineAA_xC, (lineWidthC + HaloPx + 1.5) * lineAA_xC, gridUVC.x))
                           + (1.0 - smoothstep((lineWidthC + HaloPx - 1.5) * lineAA_yC, (lineWidthC + HaloPx + 1.5) * lineAA_yC, gridUVC.y)), 0.0, 1.0) * lineFadeC;
-    const float halo = clamp(h2A + max(h2B, h2C), 0.0, 1.0);
+    // Only where a level's cells are wide on the screen: far away (or grazing) the lines crowd and a wider light outline under each one
+    // turns the whole ground pale - there the plain lines, as before the outline (Tomas 07:38Z: "the grid looks pretty bad in the distance")
+    const float wA = smoothstep(8.0, 20.0, 1.0 / max(max(lineAA_xA, lineAA_yA), 1e-5));
+    const float wB = smoothstep(8.0, 20.0, 1.0 / max(max(lineAA_xB, lineAA_yB), 1e-5));
+    const float wC = smoothstep(8.0, 20.0, 1.0 / max(max(lineAA_xC, lineAA_yC), 1e-5));
+    const float halo = clamp(h2A * wA + max(h2B * wB, h2C * wC), 0.0, 1.0);
 
     // Axis lines
     float lowX = (lineWidthB - 1.5) * lenX;
