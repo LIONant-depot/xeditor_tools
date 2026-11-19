@@ -12,6 +12,7 @@ const float GridScale       = 1.0;
 const float GridBias        = 1.0;
 const vec4  BaseColor       = vec4(0.61, 0.63, 0.7, 1.0);
 const vec4  LineColor       = vec4(0.31, 0.33, 0.4, 1.0);
+const vec3  HaloColor       = vec3(0.92, 0.93, 0.96);     // the lines' light outline (grid::m_LineHalo)
 const float LineWidth       = 1.00;
 const float MajorLineWidth  = 2.5;
 const float fade_power      = 0.7f;
@@ -39,6 +40,7 @@ layout(set = 2, binding = 0) uniform Uniforms
     float   FillAlpha;          // the fill's opacity: 0 the lines alone, what is below the grid shows through
     float   Rise;               // metres: the lines are depth-tested as the plane Rise above, the fill as Rise below (grid.cpp)
     vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
+    float   LineHalo;           // 0..1: the light outline around the dark lines (seen on surfaces of the lines' own colour)
 } uniforms;
 
 layout(location = 0) in vec2 inUV;
@@ -188,6 +190,17 @@ vec4 Grid()
 
     float grid = clamp(gridA + max(gridB, gridC), 0.0, 1.0);
 
+    // The halo: the same lines HaloPx wider, drawn light under the dark ones - a dark line alone vanishes on a dark surface, a light one on a
+    // light surface, an additive one on white; a dark core in a light outline reads on any colour (as map labels do)
+    const float HaloPx = 2.0;
+    const float h2A = clamp((1.0 - smoothstep((lineWidthA + HaloPx - 1.5) * lineAA_xA, (lineWidthA + HaloPx + 1.5) * lineAA_xA, gridUVA.x))
+                          + (1.0 - smoothstep((lineWidthA + HaloPx - 1.5) * lineAA_yA, (lineWidthA + HaloPx + 1.5) * lineAA_yA, gridUVA.y)), 0.0, 1.0) * lineFadeA;
+    const float h2B = clamp((1.0 - smoothstep((lineWidthB + HaloPx - 1.5) * lineAA_xB, (lineWidthB + HaloPx + 1.5) * lineAA_xB, gridUVB.x))
+                          + (1.0 - smoothstep((lineWidthB + HaloPx - 1.5) * lineAA_yB, (lineWidthB + HaloPx + 1.5) * lineAA_yB, gridUVB.y)), 0.0, 1.0) * lineFadeB;
+    const float h2C = clamp((1.0 - smoothstep((lineWidthC + HaloPx - 1.5) * lineAA_xC, (lineWidthC + HaloPx + 1.5) * lineAA_xC, gridUVC.x))
+                          + (1.0 - smoothstep((lineWidthC + HaloPx - 1.5) * lineAA_yC, (lineWidthC + HaloPx + 1.5) * lineAA_yC, gridUVC.y)), 0.0, 1.0) * lineFadeC;
+    const float halo = clamp(h2A + max(h2B, h2C), 0.0, 1.0);
+
     // Axis lines
     float lowX = (lineWidthB - 1.5) * lenX;
     float highX = (lineWidthB + 1.5) * lenX;
@@ -245,6 +258,7 @@ vec4 Grid()
     // the old mix(BaseColor, ...) chain, so a FillAlpha of 1 looks as before)
     cos_theta = pow(cos_theta, fade_power);
     vec4 L = vec4(0);
+    L = Over(L, HaloColor,      halo * cos_theta * uniforms.LineHalo);
     L = Over(L, LineColor.rgb,  grid * cos_theta * LineColor.a);
     L = Over(L, XAxisColor.rgb, axis_x_alpha * cos_theta * XAxisColor.a);
     L = Over(L, ZAxisColor.rgb, axis_z_alpha * cos_theta * ZAxisColor.a);

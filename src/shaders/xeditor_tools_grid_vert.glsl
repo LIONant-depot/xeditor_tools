@@ -18,6 +18,7 @@ layout(set = 2, binding = 0) uniform Uniforms
     float   FillAlpha;          // the fill's opacity: 0 the lines alone, what is below the grid shows through
     float   Rise;               // metres: the lines are depth-tested as the plane Rise above, the fill as Rise below (grid.cpp)
     vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
+    float   LineHalo;           // 0..1: the light outline around the dark lines (seen on surfaces of the lines' own colour)
 } uniforms;
 
 layout(location = 0) in vec3 inPosition;
