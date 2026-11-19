@@ -24,6 +24,7 @@ namespace xeditor_tools
         xgpu::texture       m_White;        // 1x1 white texture, handy for anything that needs a default
         bool                m_bReady        = false;
         bool                m_bShadow       = false;
+        float               m_FillAlpha     = 1.0f;     // the grey fill's opacity: 0 shows what is below the ground, the lines stay
         xgpu::device*       m_pDevice       = nullptr;
 
         bool Init(xgpu::device& Device, bool bShadow) noexcept;
@@ -60,8 +61,8 @@ namespace xeditor_tools
         xgpu::buffer            m_GridVerts;
         xgpu::buffer            m_GridIndices;  // identity ramp (0,1,2,3,4,5) - every draw call in this codebase binds an index buffer, even for a plain vertex-order list
         xgpu::buffer            m_GridUBO;
-        xgpu::pipeline          m_GridPipeline;
-        xgpu::pipeline_instance m_GridInstance;
+        xgpu::pipeline          m_GridPipeline[2];     // [0] the fill, biased behind the plane; [1] the lines, biased in front (grid.cpp Init)
+        xgpu::pipeline_instance m_GridInstance[2];
     };
 }
 

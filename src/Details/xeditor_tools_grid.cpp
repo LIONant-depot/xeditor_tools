@@ -23,6 +23,8 @@ namespace xeditor_tools
         xmath::fmat4    m_ShadowL2C;
         xmath::fvec3    m_WorldSpaceCameraPos = xmath::fvec3(0.0f, 10.0f, 0.0f);
         float           m_MajorGridDiv = 10.0f;
+        float           m_Pass         = 0.0f;      // 0 the fill, 1 the lines (the shaders' Pass)
+        float           m_FillAlpha    = 1.0f;
     };
 
     bool grid::Ok(xgpu::device::error* pErr) noexcept
@@ -87,7 +89,7 @@ namespace xeditor_tools
             });
         }
 
-        if (!Ok(Device.Create(m_GridUBO, { .m_Type = xgpu::buffer::type::UNIFORM, .m_Usage = xgpu::buffer::setup::usage::CPU_WRITE_GPU_READ, .m_EntryByteSize = sizeof(grid_uniform), .m_EntryCount = 10 }))) return false;
+        if (!Ok(Device.Create(m_GridUBO, { .m_Type = xgpu::buffer::type::UNIFORM, .m_Usage = xgpu::buffer::setup::usage::CPU_WRITE_GPU_READ, .m_EntryByteSize = sizeof(grid_uniform), .m_EntryCount = 32 }))) return false;
 
         {
             xgpu::shader Vert, Frag;
@@ -103,8 +105,24 @@ namespace xeditor_tools
             auto Shaders  = std::array<const xgpu::shader*, 2>{ &Frag, &Vert };
             // The ground reads the same from both sides, so no culling: the preview's own viewport
             // convention flips the winding.
-            if (!Ok(Device.Create(m_GridPipeline, xgpu::pipeline::setup{ .m_VertexDescriptor = m_GridVD, .m_Shaders = Shaders, .m_UniformBinds = Binds, .m_Samplers = Samplers
-                , .m_Primitive = { .m_Cull = xgpu::pipeline::primitive::cull::NONE }, .m_Blend = xgpu::pipeline::blend::getAlphaOriginal() }))) return false;
+            // A see-through overlay (the fill's FillAlpha, the lines' coverage): blended, no depth written (what is drawn after it is not
+            // hidden by a transparent ground). Alpha is "over" too: the host composites the view by its alpha, and where no geometry was drawn
+            // it is 0 - keeping the target's alpha there hid the whole grid over the empty background
+            auto Blend = xgpu::pipeline::blend::getAlphaOriginal();
+            Blend.m_AlphaSrcFactor = xgpu::pipeline::blend::factor::ONE;
+            Blend.m_AlphaDstFactor = xgpu::pipeline::blend::factor::ONE_MINUS_SRC_ALPHA;
+            // No z-fighting with what lies on the ground plane (a floor at y = 0, a foot on it): the fill is drawn a hair BEHIND the plane and the
+            // lines a hair IN FRONT of it (two pipelines, a depth bias each way), so a coplanar surface always hides the fill and always shows the
+            // lines. Slope-scaled: the scene's depth is drawn with the TAA jitter (up to half a pixel each way), the grid without (lines must not
+            // shimmer), so the two depths of one plane differ by up to the depth's own slope across a pixel - a fixed nudge lost at grazing angles
+            for (int i = 0; i < 2; ++i)
+            {
+                const float Sign = i == 0 ? 1.0f : -1.0f;
+                if (!Ok(Device.Create(m_GridPipeline[i], xgpu::pipeline::setup{ .m_VertexDescriptor = m_GridVD, .m_Shaders = Shaders, .m_UniformBinds = Binds, .m_Samplers = Samplers
+                    , .m_Primitive = { .m_Cull = xgpu::pipeline::primitive::cull::NONE }
+                    , .m_DepthStencil = { .m_DepthBiasConstantFactor = Sign * 64.0f, .m_DepthBiasSlopeFactor = Sign * 2.0f, .m_bDepthWriteEnable = false, .m_bDepthBiasEnable = true }
+                    , .m_Blend = Blend }))) return false;
+            }
 
             if (bShadow)
             {
@@ -113,7 +131,7 @@ namespace xeditor_tools
                 if (!Ok(Device.Create(m_ShadowPass, { .m_Attachments = Attachments }))) return false;
             }
             auto Bindings = std::array{ xgpu::pipeline_instance::sampler_binding{ bShadow ? m_ShadowMap : m_White } };
-            if (!Ok(Device.Create(m_GridInstance, { .m_PipeLine = m_GridPipeline, .m_SamplersBindings = Bindings }))) return false;
+            for (int i = 0; i < 2; ++i) if (!Ok(Device.Create(m_GridInstance[i], { .m_PipeLine = m_GridPipeline[i], .m_SamplersBindings = Bindings }))) return false;
         }
 
         m_bReady = true;
@@ -126,8 +144,8 @@ namespace xeditor_tools
         // xLION's own source/Tools/Editor/, not in the xeditor dependency proper, so this depot can't
         // reach into it without creating a reverse dependency on the very project consuming it.
         if (!m_pDevice) return;
-        m_pDevice->Destroy(std::move(m_GridInstance));
-        m_pDevice->Destroy(std::move(m_GridPipeline));
+        for (auto& I : m_GridInstance) m_pDevice->Destroy(std::move(I));
+        for (auto& P : m_GridPipeline) m_pDevice->Destroy(std::move(P));
         if (m_bShadow)
         {
             m_pDevice->Destroy(std::move(m_ShadowPass));
@@ -141,16 +159,22 @@ namespace xeditor_tools
         if (!m_bReady) return;
         if (CameraPos.m_Y < YOffset) return;        // front face only: from below the ground there is no grid (Tomas 2026-11-16)
 
-        CmdBuffer.setPipelineInstance(m_GridInstance);
+        for (int Pass = 0; Pass < 2; ++Pass)        // the fill (behind the plane), then the lines (in front of it): see Init
+        {
+        if (Pass == 0 && m_FillAlpha <= 0.0f) continue;
+        CmdBuffer.setPipelineInstance(m_GridInstance[Pass]);
+        CmdBuffer.setBuffer(m_GridIndices);
+        CmdBuffer.setBuffer(m_GridVerts);
         auto& Uniform = m_GridUBO.allocEntry<grid_uniform>();
+        Uniform.m_Pass         = float(Pass);
+        Uniform.m_FillAlpha    = std::clamp(m_FillAlpha, 0.0f, 1.0f);
         Uniform.m_WorldSpaceCameraPos = CameraPos;
         Uniform.m_L2W          = xmath::fmat4(xmath::fvec3(100.f, 100.0f, 1.f), xmath::radian3(-90_xdeg, 0_xdeg, 0_xdeg), xmath::fvec3(0, YOffset, 0));
         Uniform.m_W2C          = W2C;
         Uniform.m_ShadowL2C    = m_bShadow ? ClipToTextureSpace() * ShadowL2C * Uniform.m_L2W : xmath::fmat4::fromZero();
         Uniform.m_MajorGridDiv = 10.0f;
         CmdBuffer.setDynamicUBO(m_GridUBO, 0);
-        CmdBuffer.setBuffer(m_GridIndices);
-        CmdBuffer.setBuffer(m_GridVerts);
         CmdBuffer.Draw(6);
+        }
     }
 }

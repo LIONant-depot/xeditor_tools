@@ -14,6 +14,8 @@ layout(set = 2, binding = 0) uniform Uniforms
     mat4    ShadowL2C;
     vec4    WorldSpaceCameraPos;
     float   MajorGridDiv;
+    float   Pass;               // 0: the fill (pushed behind the ground plane), 1: the lines (pulled in front of it) - grid::Draw draws both
+    float   FillAlpha;          // the fill's opacity: 0 the lines alone, what is below the grid shows through
 } uniforms;
 
 layout(location = 0) in vec3 inPosition;
@@ -28,7 +30,8 @@ void main()
 {
     vec4 worldPos4 = uniforms.L2W * vec4(inPosition, 1.0);
     vec3 worldPos = worldPos4.xyz;
-    gl_Position  = uniforms.W2C * worldPos4;
+
+    gl_Position  = uniforms.W2C * worldPos4;      // (the fill behind the plane, the lines in front: a depth bias in each pass's pipeline, grid.cpp)
     outShadowPos = uniforms.ShadowL2C * vec4(inPosition, 1.0);
 
     // Assume WorldUV = true

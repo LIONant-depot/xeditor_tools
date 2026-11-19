@@ -35,6 +35,8 @@ layout(set = 2, binding = 0) uniform Uniforms
     mat4    ShadowL2C;
     vec4    WorldSpaceCameraPos;
     float   MajorGridDiv;
+    float   Pass;               // 0: the fill (pushed behind the ground plane), 1: the lines (pulled in front of it) - grid::Draw draws both
+    float   FillAlpha;          // the fill's opacity: 0 the lines alone, what is below the grid shows through
 } uniforms;
 
 layout(location = 0) in vec2 inUV;
@@ -74,6 +76,9 @@ float sdArrow(in vec2 p) {
 
     return min(d1, d2);
 }
+
+// A premultiplied layer with a colour of opacity A put over it
+vec4 Over(in const vec4 Dst, in const vec3 C, in const float A) { return vec4(C * A + Dst.rgb * (1.0 - A), A + Dst.a * (1.0 - A)); }
 
 vec4 Grid() 
 {
@@ -234,16 +239,17 @@ vec4 Grid()
         arrow_z = max(arrow_z, smoothstep(-aa, aa, -d));
     }
 
-    // Combine
+    // Combine: the lines alone, as a layer over the fill (premultiplied, "over" one after another - over an opaque fill this is exactly
+    // the old mix(BaseColor, ...) chain, so a FillAlpha of 1 looks as before)
     cos_theta = pow(cos_theta, fade_power);
-    vec4 oColor = vec4(0);
-    oColor = mix(BaseColor, LineColor, grid * cos_theta * LineColor.a);
-    oColor = mix(oColor, XAxisColor, axis_x_alpha * cos_theta * XAxisColor.a);
-    oColor = mix(oColor, ZAxisColor, axis_z_alpha * cos_theta * ZAxisColor.a);
-    oColor = mix(oColor, XAxisColor, arrow_x * cos_theta * XAxisColor.a);
-    oColor = mix(oColor, ZAxisColor, arrow_z * cos_theta * ZAxisColor.a);
-
-    return oColor * oColor ;//* 0.8;
+    vec4 L = vec4(0);
+    L = Over(L, LineColor.rgb,  grid * cos_theta * LineColor.a);
+    L = Over(L, XAxisColor.rgb, axis_x_alpha * cos_theta * XAxisColor.a);
+    L = Over(L, ZAxisColor.rgb, axis_z_alpha * cos_theta * ZAxisColor.a);
+    L = Over(L, XAxisColor.rgb, arrow_x * cos_theta * XAxisColor.a);
+    L = Over(L, ZAxisColor.rgb, arrow_z * cos_theta * ZAxisColor.a);
+    const vec3 C = L.rgb / max(L.a, 1e-5);
+    return vec4(C * C, L.a);            // (the grid's own approximation of sRGB to linear, as before)
 }
 
 //----------------------------------------------------------------------------------------
@@ -296,7 +302,10 @@ float ShadowPCF(in const vec4 UVProjection)
 
 void main()
 {
-    const vec4  DiffuseColor    = Grid();
+    // The fill pass: the plain ground colour at FillAlpha; the lines pass: the lines with their own coverage (grid::Draw, two draws)
+    const bool  bFill           = uniforms.Pass < 0.5;
+    const vec4  DiffuseColor    = bFill ? vec4(BaseColor.rgb * BaseColor.rgb, uniforms.FillAlpha) : Grid();
+    if (DiffuseColor.a <= 0.002) discard;
     // w must be checked BEFORE the divide, not after (SampleShadowTexture's own Coord.w>0.0 check
     // runs on the already-normalized Coord.w, which is always 1.0 post-divide regardless of the
     // original sign) - otherwise a point behind the light (negative w) still gets divided, flipping
@@ -309,7 +318,7 @@ void main()
     out_Color.rgb = ToneMapper_lion(FinalColor);
 
     out_Color.rgb = linearToSrgb(out_Color.rgb);
-    out_Color.a = 1;
+    out_Color.a = DiffuseColor.a;
 }
 
 
