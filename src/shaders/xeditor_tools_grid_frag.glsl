@@ -270,8 +270,11 @@ vec4 Grid()
     L = Over(L, LineColor.rgb,  grid * cos_theta * LineColor.a);
     L = Over(L, XAxisColor.rgb, axis_x_alpha * cos_theta * XAxisColor.a);
     L = Over(L, ZAxisColor.rgb, axis_z_alpha * cos_theta * ZAxisColor.a);
-    L = Over(L, XAxisColor.rgb, arrow_x * cos_theta * XAxisColor.a);
-    L = Over(L, ZAxisColor.rgb, arrow_z * cos_theta * ZAxisColor.a);
+    // The arrows are distant markers: under ~3 m from the eye their 0.5 m bands fill the view and their edge reads as a second, shifted
+    // axis line (Tomas 09:11Z, "a strange offset" up close), so they fade out there; the axis lines stay
+    const float ArrowFade = isOrtho ? 1.0 : smoothstep(1.0, 3.0, diffLen);     // (ortho has no eye distance: kept)
+    L = Over(L, XAxisColor.rgb, arrow_x * ArrowFade * cos_theta * XAxisColor.a);
+    L = Over(L, ZAxisColor.rgb, arrow_z * ArrowFade * cos_theta * ZAxisColor.a);
     const vec3 C = L.rgb / max(L.a, 1e-5);
     return vec4(C * C, L.a);            // (the grid's own approximation of sRGB to linear, as before)
 }
