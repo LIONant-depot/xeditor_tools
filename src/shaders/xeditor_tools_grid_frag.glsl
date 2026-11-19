@@ -84,6 +84,22 @@ float sdArrow(in vec2 p) {
 // A premultiplied layer with a colour of opacity A put over it
 vec4 Over(in const vec4 Dst, in const vec3 C, in const float A) { return vec4(C * A + Dst.rgb * (1.0 - A), A + Dst.a * (1.0 - A)); }
 
+// One level's lines (cells of size 1 in UV): their coverage of this pixel. WidthPx is the line's width on the screen, Deriv a pixel's size
+// in cells along x and y. Thin lines aliased into dashes and dots (Tomas 07:50Z, "the grid is not clean"): a line thinner than a pixel is
+// drawn a pixel wide at the opacity its width would cover (the same weight, no gaps); where the cells shrink toward a pixel, the result
+// goes to the lines' mean coverage of the cell (what a perfect filter returns) instead of sampling them.
+float LinesCoverage(in const vec2 UV, in const vec2 Deriv, in const float WidthPx)
+{
+    const vec2 D      = max(Deriv, vec2(1e-6));
+    const vec2 Want   = max(WidthPx, 0.0) * D;                       // the width in cells
+    const vec2 Drawn  = clamp(Want, D, vec2(0.5));                   // at least a pixel
+    const vec2 Dist   = abs(fract(UV + 0.5) - 0.5);                  // to the nearest line, in cells
+    vec2 C = 1.0 - smoothstep(Drawn * 0.5 - D * 0.75, Drawn * 0.5 + D * 0.75, Dist);
+    C *= clamp(Want / Drawn, 0.0, 1.0);
+    C  = mix(C, min(Want, vec2(1.0)), clamp(D * 2.0 - 1.0, 0.0, 1.0));
+    return C.x + C.y - C.x * C.y;                                    // the two directions (no double darkening where they cross)
+}
+
 vec4 Grid() 
 {
     // Compute projection properties
@@ -175,30 +191,17 @@ vec4 Grid()
     float lineAA_xC = lenX / uvScaleC;
     float lineAA_yC = lenY / uvScaleC;
 
-    float grid2A_x = 1.0 - smoothstep((lineWidthA - 1.5) * lineAA_xA, (lineWidthA + 1.5) * lineAA_xA, gridUVA.x);
-    float grid2A_y = 1.0 - smoothstep((lineWidthA - 1.5) * lineAA_yA, (lineWidthA + 1.5) * lineAA_yA, gridUVA.y);
-
-    float grid2B_x = 1.0 - smoothstep((lineWidthB - 1.5) * lineAA_xB, (lineWidthB + 1.5) * lineAA_xB, gridUVB.x);
-    float grid2B_y = 1.0 - smoothstep((lineWidthB - 1.5) * lineAA_yB, (lineWidthB + 1.5) * lineAA_yB, gridUVB.y);
-
-    float grid2C_x = 1.0 - smoothstep((lineWidthC - 1.5) * lineAA_xC, (lineWidthC + 1.5) * lineAA_xC, gridUVC.x);
-    float grid2C_y = 1.0 - smoothstep((lineWidthC - 1.5) * lineAA_yC, (lineWidthC + 1.5) * lineAA_yC, gridUVC.y);
-
-    float gridA = clamp(grid2A_x + grid2A_y, 0.0, 1.0) * lineFadeA;
-    float gridB = clamp(grid2B_x + grid2B_y, 0.0, 1.0) * lineFadeB;
-    float gridC = clamp(grid2C_x + grid2C_y, 0.0, 1.0) * lineFadeC;
-
+    const float gridA = LinesCoverage(UVA, vec2(lineAA_xA, lineAA_yA), lineWidthA);
+    const float gridB = LinesCoverage(UVB, vec2(lineAA_xB, lineAA_yB), lineWidthB);
+    const float gridC = LinesCoverage(UVC, vec2(lineAA_xC, lineAA_yC), lineWidthC);
     float grid = clamp(gridA + max(gridB, gridC), 0.0, 1.0);
 
     // The halo: the same lines HaloPx wider, drawn light under the dark ones - a dark line alone vanishes on a dark surface, a light one on a
     // light surface, an additive one on white; a dark core in a light outline reads on any colour (as map labels do)
     const float HaloPx = 2.0;
-    const float h2A = clamp((1.0 - smoothstep((lineWidthA + HaloPx - 1.5) * lineAA_xA, (lineWidthA + HaloPx + 1.5) * lineAA_xA, gridUVA.x))
-                          + (1.0 - smoothstep((lineWidthA + HaloPx - 1.5) * lineAA_yA, (lineWidthA + HaloPx + 1.5) * lineAA_yA, gridUVA.y)), 0.0, 1.0) * lineFadeA;
-    const float h2B = clamp((1.0 - smoothstep((lineWidthB + HaloPx - 1.5) * lineAA_xB, (lineWidthB + HaloPx + 1.5) * lineAA_xB, gridUVB.x))
-                          + (1.0 - smoothstep((lineWidthB + HaloPx - 1.5) * lineAA_yB, (lineWidthB + HaloPx + 1.5) * lineAA_yB, gridUVB.y)), 0.0, 1.0) * lineFadeB;
-    const float h2C = clamp((1.0 - smoothstep((lineWidthC + HaloPx - 1.5) * lineAA_xC, (lineWidthC + HaloPx + 1.5) * lineAA_xC, gridUVC.x))
-                          + (1.0 - smoothstep((lineWidthC + HaloPx - 1.5) * lineAA_yC, (lineWidthC + HaloPx + 1.5) * lineAA_yC, gridUVC.y)), 0.0, 1.0) * lineFadeC;
+    const float h2A = LinesCoverage(UVA, vec2(lineAA_xA, lineAA_yA), lineWidthA + HaloPx * lineFadeA);
+    const float h2B = LinesCoverage(UVB, vec2(lineAA_xB, lineAA_yB), lineWidthB + HaloPx * lineFadeB);
+    const float h2C = LinesCoverage(UVC, vec2(lineAA_xC, lineAA_yC), lineWidthC + HaloPx * lineFadeC);
     // Only where a level's cells are wide on the screen: far away (or grazing) the lines crowd and a wider light outline under each one
     // turns the whole ground pale - there the plain lines, as before the outline (Tomas 07:38Z: "the grid looks pretty bad in the distance")
     const float wA = smoothstep(8.0, 20.0, 1.0 / max(max(lineAA_xA, lineAA_yA), 1e-5));
