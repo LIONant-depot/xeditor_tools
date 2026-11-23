@@ -371,12 +371,15 @@ void main()
     // floors). Adaptive is grid::m_LineContrast
     if (bAdaptiveLines)
     {
-        const vec3  Under   = uniforms.UnderColor.w > 0.5 ? uniforms.UnderColor.rgb : texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
+        // What is under the line: the scene copy (alpha 1 where something was drawn), or a preview's plain background. The fill is under the
+        // line only where nothing was drawn: a floor on the plane hides it (Tomas 13:25Z: counting the fill there picked the floor's own grey)
+        const vec4  UnderA  = uniforms.UnderColor.w > 0.5 ? vec4(uniforms.UnderColor.rgb, 0.0) : texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0);
+        const vec3  Under   = UnderA.rgb;
         const vec3  FillLin = BaseColor.rgb * BaseColor.rgb;
         const vec3  FillDsp = linearToSrgb(ToneMapper_lion((FillLin - FillLin * t) * Shadow + FillLin * t));
         // The colour's magnitude wraps and the colour is scaled to it (Tomas 08:11Z: "fmod the magnitude of the color vector then set back the
         // magnitude"): hue and saturation kept; a per-channel wrap turned a near-white floor's lines yellow (08:02Z). Magnitude |c| / sqrt(3): white is 1
-        const vec3  Below   = mix(Under, FillDsp, uniforms.FillAlpha);
+        const vec3  Below   = mix(Under, FillDsp, uniforms.FillAlpha * (1.0 - UnderA.a));
         const float Mag     = length(Below) * 0.57735;
         const float NewMag  = fract(Mag + uniforms.Adaptive);
         const vec3  Line    = Mag > 1e-3 ? clamp(Below * (NewMag / Mag), 0.0, 1.0) : vec3(NewMag);
