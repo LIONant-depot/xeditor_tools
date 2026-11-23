@@ -158,13 +158,13 @@ namespace xeditor_tools
         if (!m_bReady) return;
         // The lines' pipeline with what they draw over bound (only the lines read it); made again when it is another image (a resized view)
         const bool bAdaptive = m_bAdaptiveLines && pUnder && pUnder->m_Private;
-        if (bAdaptive && m_pUnderKey != pUnder->m_Private)
+        if (bAdaptive && m_pUnderKey != pUnder->m_Private.get())
         {
             if (m_UnderInstance.m_Private) m_pDevice->Destroy(std::move(m_UnderInstance));
             auto Bindings = std::array{ xgpu::pipeline_instance::sampler_binding{ m_bShadow ? m_ShadowMap : m_White }, xgpu::pipeline_instance::sampler_binding{ const_cast<xgpu::texture&>(*pUnder) } };
-            m_pUnderKey = Ok(m_pDevice->Create(m_UnderInstance, { .m_PipeLine = m_GridPipeline[1], .m_SamplersBindings = Bindings })) ? pUnder->m_Private : nullptr;
+            m_pUnderKey = Ok(m_pDevice->Create(m_UnderInstance, { .m_PipeLine = m_GridPipeline[1], .m_SamplersBindings = Bindings })) ? static_cast<const void*>(pUnder->m_Private.get()) : nullptr;
         }
-        const bool bUnder = bAdaptive && m_pUnderKey == pUnder->m_Private;
+        const bool bUnder = bAdaptive && m_pUnderKey == pUnder->m_Private.get();
         if (CameraPos.m_Y < YOffset) return;        // front face only: from below the ground there is no grid (Tomas 2026-11-16)
 
         for (int Pass = 0; Pass < 2; ++Pass)        // the fill (behind the plane), then the lines (in front of it): see Init
