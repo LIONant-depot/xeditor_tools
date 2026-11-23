@@ -288,6 +288,10 @@ vec4 Grid(out float LineCov)  // LineCov: the plain lines' coverage (adaptive: m
 
 //----------------------------------------------------------------------------------------
 
+// Where nothing was drawn the image is see-through (alpha < 1) and the host shows it over its dark panel colour (~0.21): what the eye sees
+// there is that, not the darker raw pixel (Tomas 13:43Z: lines over the empty ground came out near black)
+vec3 UnderShown(in const vec4 C) { return C.rgb + (1.0 - C.a) * vec3(0.21); }
+
 int isqr(int a) { return a * a; }
 
 //----------------------------------------------------------------------------------------
@@ -376,7 +380,7 @@ void main()
         const vec3  FillLin = BaseColor.rgb * BaseColor.rgb;
         const vec3  FillDsp = linearToSrgb(ToneMapper_lion((FillLin - FillLin * t) * Shadow + FillLin * t));
         const vec3  Below   = uniforms.UnderColor.w > 0.5 ? mix(uniforms.UnderColor.rgb, FillDsp, uniforms.FillAlpha)
-                                                          : texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
+                                                          : UnderShown(texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0));
         const float Mag     = length(Below) * 0.57735;
         const float NewMag  = fract(Mag + uniforms.Adaptive);
         const vec3  Line    = Mag > 1e-3 ? clamp(Below * (NewMag / Mag), 0.0, 1.0) : vec3(NewMag);

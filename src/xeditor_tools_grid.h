@@ -28,7 +28,7 @@ namespace xeditor_tools
         float               m_LineHalo      = 0.11f;    // 0..1: a light outline around the dark lines, so they read on surfaces of their own colour;
                                                         // defaults (fill .57, outline .11, 1.3 cm): Tomas 2026-11-19 14:00Z, his tuned values
         float               m_UnderR = 0.45f, m_UnderG = 0.45f, m_UnderB = 0.45f;   // what the lines draw over when Draw gets no pUnder: the previews' plain grey
-        float               m_LineContrast   = -0.2f;   // the adaptive lines: what they draw over + this, wrapped (fract): they differ from it by |this| or 1 - |this|;
+        float               m_LineContrast   = -0.15f;   // the adaptive lines: what they draw over + this, wrapped (fract): they differ from it by |this| or 1 - |this|;
                                                         // negative: darker lines (light only over near-black ground), positive: lighter (Tomas 11:27Z: "always look brighter")
         bool                m_bAdaptiveLines = true;    // with what the lines draw over (Draw's pUnder): dark lines on light pixels, light on dark ones
                                                         // (Tomas 2026-11-23, option A: the lines are seen on any colour); off: the fixed grey lines + LineHalo
