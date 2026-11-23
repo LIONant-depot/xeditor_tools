@@ -26,6 +26,7 @@ const vec4 XAxisColor       = vec4(1.0, 0.0, 0.0, 1.0);
 const vec4 ZAxisColor       = vec4(0.0, 0.0, 1.0, 1.0);
 
 layout(binding = 0) uniform sampler2D SamplerShadowMap;        // [INPUT_TEXTURE_SHADOW]
+layout(binding = 1) uniform sampler2D SamplerUnder;            // what the lines draw over (the renderer's OverlaySource; white when there is none)
 
 
 // Push constants
@@ -41,6 +42,7 @@ layout(set = 2, binding = 0) uniform Uniforms
     float   Rise;               // metres: the lines are depth-tested as the plane Rise above, the fill as Rise below (grid.cpp)
     vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
     float   LineHalo;           // 0..1: the light outline around the dark lines (seen on surfaces of the lines' own colour)
+    float   Adaptive;           // 1: the lines are dark on light pixels and light on dark ones, read from SamplerUnder (Tomas 2026-11-23, option A)
 } uniforms;
 
 layout(location = 0) in vec2 inUV;
@@ -100,7 +102,7 @@ float LinesCoverage(in const vec2 UV, in const vec2 Deriv, in const float WidthP
     return C.x + C.y - C.x * C.y;                                    // the two directions (no double darkening where they cross)
 }
 
-vec4 Grid() 
+vec4 Grid(out float LineCov)  // LineCov: the plain lines' coverage (adaptive: main() draws them in display space, the axes stay here)
 {
     // Compute projection properties
     vec4 projRow3 = vec4(uniforms.W2C[0][3], uniforms.W2C[1][3], uniforms.W2C[2][3], uniforms.W2C[3][3]);
@@ -266,8 +268,10 @@ vec4 Grid()
     // the old mix(BaseColor, ...) chain, so a FillAlpha of 1 looks as before)
     cos_theta = pow(cos_theta, fade_power);
     vec4 L = vec4(0);
-    L = Over(L, HaloColor,      halo * cos_theta * uniforms.LineHalo);
-    L = Over(L, LineColor.rgb,  grid * cos_theta * LineColor.a);
+    const bool bAdaptive = uniforms.Adaptive > 0.5;
+    LineCov = grid * cos_theta * LineColor.a;
+    if (!bAdaptive) L = Over(L, HaloColor,      halo * cos_theta * uniforms.LineHalo);
+    if (!bAdaptive) L = Over(L, LineColor.rgb,  LineCov);
     L = Over(L, XAxisColor.rgb, axis_x_alpha * cos_theta * XAxisColor.a);
     L = Over(L, ZAxisColor.rgb, axis_z_alpha * cos_theta * ZAxisColor.a);
     L = Over(L, XAxisColor.rgb, arrow_x * cos_theta * XAxisColor.a);
@@ -336,8 +340,10 @@ void main()
     const float Guard = 0.5 * max(abs(Dx), abs(Dy)) + 8.0 / 16777216.0;
     gl_FragDepth = gl_FragCoord.z - Dx * uniforms.JitterPx.x - Dy * uniforms.JitterPx.y + (uniforms.Pass < 0.5 ? Guard : -Guard);
     const bool  bFill           = uniforms.Pass < 0.5;
-    const vec4  DiffuseColor    = bFill ? vec4(BaseColor.rgb * BaseColor.rgb, uniforms.FillAlpha) : Grid();
-    if (DiffuseColor.a <= 0.002) discard;
+    float       LineCov         = 0.0;
+    const vec4  DiffuseColor    = bFill ? vec4(BaseColor.rgb * BaseColor.rgb, uniforms.FillAlpha) : Grid(LineCov);
+    const bool  bAdaptiveLines  = !bFill && uniforms.Adaptive > 0.5;
+    if (DiffuseColor.a <= 0.002 && !(bAdaptiveLines && LineCov > 0.002)) discard;
     // w must be checked BEFORE the divide, not after (SampleShadowTexture's own Coord.w>0.0 check
     // runs on the already-normalized Coord.w, which is always 1.0 post-divide regardless of the
     // original sign) - otherwise a point behind the light (negative w) still gets divided, flipping
@@ -351,6 +357,21 @@ void main()
 
     out_Color.rgb = linearToSrgb(out_Color.rgb);
     out_Color.a = DiffuseColor.a;
+
+    // Adaptive lines (option A): what the line is drawn over is the scene (SamplerUnder, copied before the overlays) under the fill at FillAlpha;
+    // a dark line on a light one, a light line on a dark one, in display values. Any blend of the pixel below alone has a colour it vanishes on
+    // (XOR/invert on mid grey, add on white): this choice never does (worst contrast 0.4). The axes (red, blue) stay over the lines as before
+    if (bAdaptiveLines)
+    {
+        const vec3  Under   = texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
+        const vec3  FillLin = BaseColor.rgb * BaseColor.rgb;
+        const vec3  FillDsp = linearToSrgb(ToneMapper_lion((FillLin - FillLin * t) * Shadow + FillLin * t));
+        const vec3  Below   = mix(Under, FillDsp, uniforms.FillAlpha);
+        const float Line    = dot(Below, vec3(0.2126, 0.7152, 0.0722)) > 0.5 ? 0.1 : 0.9;
+        const float Ax      = DiffuseColor.a;
+        const float A       = Ax + LineCov * (1.0 - Ax);
+        out_Color = vec4((out_Color.rgb * Ax + vec3(Line) * LineCov * (1.0 - Ax)) / max(A, 1e-5), A);
+    }
 }
 
 

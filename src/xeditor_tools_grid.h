@@ -27,6 +27,8 @@ namespace xeditor_tools
         float               m_FillAlpha     = 0.57f;    // the grey fill's opacity: 0 shows what is below the ground, the lines stay
         float               m_LineHalo      = 0.11f;    // 0..1: a light outline around the dark lines, so they read on surfaces of their own colour;
                                                         // defaults (fill .57, outline .11, 1.3 cm): Tomas 2026-11-19 14:00Z, his tuned values
+        bool                m_bAdaptiveLines = true;    // with what the lines draw over (Draw's pUnder): dark lines on light pixels, light on dark ones
+                                                        // (Tomas 2026-11-23, option A: the lines are seen on any colour); off: the fixed grey lines + LineHalo
         float               m_Rise          = 0.013f;   // metres: a surface this close to the plane counts as on it (lines shown, fill hidden); a floor saved
                                                         // 6 mm up (JointTest) hid the lines near and showed them far with any per-pixel slack
         xgpu::device*       m_pDevice       = nullptr;
@@ -43,9 +45,10 @@ namespace xeditor_tools
         // world-space-to-the-light's-clip-space (pass xmath::fmat4::fromZero() for "no shadow" - the
         // shader reads an all-zero matrix as "always lit", the same convention every shadow-casting
         // editor already used).
-        void Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset = 0.0f, xmath::fvec2 JitterPx = { 0.0f, 0.0f }) noexcept;
+        void Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset = 0.0f, xmath::fvec2 JitterPx = { 0.0f, 0.0f }, const xgpu::texture* pUnder = nullptr) noexcept;
         // JitterPx: the TAA jitter, in pixels, of the depth the grid is tested against (xlionrender's OverlayJitter times half the view's size);
         // zero for a depth drawn without one
+        // pUnder: the image the grid draws over, the view's size (xlionrender's OverlaySource); null: the fixed grey lines
 
         // Clip space to shadow-texture space - the remap every shadow matrix fed to a shader goes
         // through. Shared here since every shadow-casting editor already needed the identical helper.
@@ -69,6 +72,8 @@ namespace xeditor_tools
         xgpu::buffer            m_GridUBO;
         xgpu::pipeline          m_GridPipeline[2];     // [0] the fill, biased behind the plane; [1] the lines, biased in front (grid.cpp Init)
         xgpu::pipeline_instance m_GridInstance[2];
+        xgpu::pipeline_instance m_UnderInstance;        // the lines' pipeline with pUnder bound (made again when pUnder is another image)
+        const void*             m_pUnderKey     = nullptr;
     };
 }
 

@@ -28,6 +28,7 @@ namespace xeditor_tools
         float           m_Rise         = 0.0f;      // grid::m_Rise
         float           m_JitterPx[2]  = { 0, 0 };
         float           m_LineHalo     = 0.0f;
+        float           m_Adaptive     = 0.0f;      // 1: the lines read SamplerUnder (grid::m_bAdaptiveLines)
     };
 
     bool grid::Ok(xgpu::device::error* pErr) noexcept
@@ -104,7 +105,8 @@ namespace xeditor_tools
             if (!Shader(Frag, xgpu::shader::type::bit::FRAGMENT, g_GridFragShader, std::size(g_GridFragShader))) return false;
 
             auto Binds    = std::array{ xgpu::pipeline::uniform_binds{ .m_BindIndex = 0, .m_Usage = { .m_bVertex = true, .m_bFragment = true }, .m_Type = xgpu::pipeline::uniform_binds::type::UBO_DYNAMIC } };
-            auto Samplers = std::array{ xgpu::pipeline::sampler{ .m_AddressMode = std::array{ xgpu::pipeline::sampler::address_mode::CLAMP, xgpu::pipeline::sampler::address_mode::CLAMP, xgpu::pipeline::sampler::address_mode::CLAMP } } };
+            const auto Clamp = xgpu::pipeline::sampler{ .m_AddressMode = std::array{ xgpu::pipeline::sampler::address_mode::CLAMP, xgpu::pipeline::sampler::address_mode::CLAMP, xgpu::pipeline::sampler::address_mode::CLAMP } };
+            auto Samplers = std::array{ Clamp, Clamp };         // the shadow map, what the lines draw over
             auto Shaders  = std::array<const xgpu::shader*, 2>{ &Frag, &Vert };
             // The ground reads the same from both sides, so no culling: the preview's own viewport
             // convention flips the winding.
@@ -125,7 +127,7 @@ namespace xeditor_tools
                 std::array<xgpu::renderpass::attachment, 1> Attachments{ m_ShadowMap };
                 if (!Ok(Device.Create(m_ShadowPass, { .m_Attachments = Attachments }))) return false;
             }
-            auto Bindings = std::array{ xgpu::pipeline_instance::sampler_binding{ bShadow ? m_ShadowMap : m_White } };
+            auto Bindings = std::array{ xgpu::pipeline_instance::sampler_binding{ bShadow ? m_ShadowMap : m_White }, xgpu::pipeline_instance::sampler_binding{ m_White } };
             for (int i = 0; i < 2; ++i) if (!Ok(Device.Create(m_GridInstance[i], { .m_PipeLine = m_GridPipeline[i], .m_SamplersBindings = Bindings }))) return false;
         }
 
@@ -140,6 +142,8 @@ namespace xeditor_tools
         // reach into it without creating a reverse dependency on the very project consuming it.
         if (!m_pDevice) return;
         for (auto& I : m_GridInstance) m_pDevice->Destroy(std::move(I));
+        if (m_UnderInstance.m_Private) m_pDevice->Destroy(std::move(m_UnderInstance));
+        m_pUnderKey = nullptr;
         for (auto& P : m_GridPipeline) m_pDevice->Destroy(std::move(P));
         if (m_bShadow)
         {
@@ -149,15 +153,24 @@ namespace xeditor_tools
         m_pDevice->Destroy(std::move(m_White));
     }
 
-    void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset, xmath::fvec2 JitterPx) noexcept
+    void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset, xmath::fvec2 JitterPx, const xgpu::texture* pUnder) noexcept
     {
         if (!m_bReady) return;
+        // The lines' pipeline with what they draw over bound (only the lines read it); made again when it is another image (a resized view)
+        const bool bAdaptive = m_bAdaptiveLines && pUnder && pUnder->m_Private;
+        if (bAdaptive && m_pUnderKey != pUnder->m_Private)
+        {
+            if (m_UnderInstance.m_Private) m_pDevice->Destroy(std::move(m_UnderInstance));
+            auto Bindings = std::array{ xgpu::pipeline_instance::sampler_binding{ m_bShadow ? m_ShadowMap : m_White }, xgpu::pipeline_instance::sampler_binding{ const_cast<xgpu::texture&>(*pUnder) } };
+            m_pUnderKey = Ok(m_pDevice->Create(m_UnderInstance, { .m_PipeLine = m_GridPipeline[1], .m_SamplersBindings = Bindings })) ? pUnder->m_Private : nullptr;
+        }
+        const bool bUnder = bAdaptive && m_pUnderKey == pUnder->m_Private;
         if (CameraPos.m_Y < YOffset) return;        // front face only: from below the ground there is no grid (Tomas 2026-11-16)
 
         for (int Pass = 0; Pass < 2; ++Pass)        // the fill (behind the plane), then the lines (in front of it): see Init
         {
         if (Pass == 0 && m_FillAlpha <= 0.0f) continue;
-        CmdBuffer.setPipelineInstance(m_GridInstance[Pass]);
+        CmdBuffer.setPipelineInstance(Pass == 1 && bUnder ? m_UnderInstance : m_GridInstance[Pass]);
         CmdBuffer.setBuffer(m_GridIndices);
         CmdBuffer.setBuffer(m_GridVerts);
         auto& Uniform = m_GridUBO.allocEntry<grid_uniform>();
@@ -165,6 +178,7 @@ namespace xeditor_tools
         Uniform.m_FillAlpha    = std::clamp(m_FillAlpha, 0.0f, 1.0f);
         Uniform.m_Rise         = m_Rise;
         Uniform.m_LineHalo     = std::clamp(m_LineHalo, 0.0f, 1.0f);
+        Uniform.m_Adaptive     = Pass == 1 && bUnder ? 1.0f : 0.0f;
         Uniform.m_JitterPx[0]  = JitterPx.m_X; Uniform.m_JitterPx[1] = JitterPx.m_Y;
         Uniform.m_WorldSpaceCameraPos = CameraPos;
         Uniform.m_L2W          = xmath::fmat4(xmath::fvec3(100.f, 100.0f, 1.f), xmath::radian3(-90_xdeg, 0_xdeg, 0_xdeg), xmath::fvec3(0, YOffset, 0));
