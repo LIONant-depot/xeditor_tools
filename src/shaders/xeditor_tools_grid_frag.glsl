@@ -385,7 +385,9 @@ void main()
         const float S       = clamp((0.5 - dot(Ground, W)) / 0.15, -1.0, 1.0);             // +1 dark ground (lighter line) .. -1 light ground
         const vec3  Darker  = Below * max(1.0 - Step / Y, 0.0);                             // same hue
         const vec3  Lighter = Below + (1.0 - Below) * min(Step / max(1.0 - Y, 1e-3), 1.0);  // same hue
-        const vec3  Line    = clamp(mix(Darker, Lighter, S * 0.5 + 0.5) + (1.0 - abs(S)) * vec3(-0.05, 0.02, 0.14), 0.0, 1.0);
+        const vec3  Smooth  = clamp(mix(Darker, Lighter, S * 0.5 + 0.5) + (1.0 - abs(S)) * vec3(-0.05, 0.02, 0.14), 0.0, 1.0);
+        const vec3  Wrapped = fract(Below + 0.3);                                         // mode 2 (Tomas 07:26Z: "a + with a mod 1"): contrast 0.3 everywhere, a jump where it wraps
+        const vec3  Line    = uniforms.Adaptive > 1.5 ? Wrapped : Smooth;
         const float Ax      = DiffuseColor.a;
         const float A       = Ax + LineCov * (1.0 - Ax);
         out_Color = vec4((out_Color.rgb * Ax + Line * LineCov * (1.0 - Ax)) / max(A, 1e-5), A);
