@@ -270,7 +270,7 @@ vec4 Grid(out float LineCov)  // LineCov: the plain lines' coverage (adaptive: m
     // the old mix(BaseColor, ...) chain, so a FillAlpha of 1 looks as before)
     cos_theta = pow(cos_theta, fade_power);
     vec4 L = vec4(0);
-    const bool bAdaptive = uniforms.Adaptive > 0.0;
+    const bool bAdaptive = uniforms.Adaptive != 0.0;
     // The axes and their arrows are never overdrawn by a line (Tomas 2026-11-23 06:49Z): no line where any of them is
     LineCov = grid * cos_theta * LineColor.a * (1.0 - clamp(3.0 * max(max(axis_x_alpha, axis_z_alpha), max(arrow_x, arrow_z)), 0.0, 1.0));
     if (!bAdaptive) L = Over(L, HaloColor,      halo * cos_theta * uniforms.LineHalo);
@@ -345,7 +345,7 @@ void main()
     const bool  bFill           = uniforms.Pass < 0.5;
     float       LineCov         = 0.0;
     const vec4  DiffuseColor    = bFill ? vec4(BaseColor.rgb * BaseColor.rgb, uniforms.FillAlpha) : Grid(LineCov);
-    const bool  bAdaptiveLines  = !bFill && uniforms.Adaptive > 0.0;
+    const bool  bAdaptiveLines  = !bFill && uniforms.Adaptive != 0.0;
     if (DiffuseColor.a <= 0.002 && !(bAdaptiveLines && LineCov > 0.002)) discard;
     // w must be checked BEFORE the divide, not after (SampleShadowTexture's own Coord.w>0.0 check
     // runs on the already-normalized Coord.w, which is always 1.0 post-divide regardless of the

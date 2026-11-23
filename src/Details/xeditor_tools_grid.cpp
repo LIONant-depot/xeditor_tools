@@ -183,7 +183,7 @@ namespace xeditor_tools
         Uniform.m_FillAlpha    = std::clamp(m_FillAlpha, 0.0f, 1.0f);
         Uniform.m_Rise         = m_Rise;
         Uniform.m_LineHalo     = std::clamp(m_LineHalo, 0.0f, 1.0f);
-        Uniform.m_Adaptive     = Pass == 1 && (bUnder || bPlain) ? std::clamp(m_LineContrast, 0.01f, 0.5f) : 0.0f;
+        Uniform.m_Adaptive     = Pass == 1 && (bUnder || bPlain) ? (std::abs(m_LineContrast) < 0.01f ? -0.01f : std::clamp(m_LineContrast, -0.5f, 0.5f)) : 0.0f;
         Uniform.m_UnderColor[0] = m_UnderR; Uniform.m_UnderColor[1] = m_UnderG; Uniform.m_UnderColor[2] = m_UnderB; Uniform.m_UnderColor[3] = bPlain ? 1.0f : 0.0f;
         Uniform.m_JitterPx[0]  = JitterPx.m_X; Uniform.m_JitterPx[1] = JitterPx.m_Y;
         Uniform.m_WorldSpaceCameraPos = CameraPos;
