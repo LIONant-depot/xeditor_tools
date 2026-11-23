@@ -272,7 +272,10 @@ vec4 Grid(out float LineCov)  // LineCov: the plain lines' coverage (adaptive: m
     vec4 L = vec4(0);
     const bool bAdaptive = uniforms.Adaptive != 0.0;
     // The axes and their arrows are never overdrawn by a line (Tomas 2026-11-23 06:49Z): no line where any of them is
-    LineCov = grid * cos_theta * LineColor.a * (1.0 - clamp(3.0 * max(max(axis_x_alpha, axis_z_alpha), max(arrow_x, arrow_z)), 0.0, 1.0));
+    // Adaptive lines are not faded by the view angle (Tomas 13:23Z, a low camera over the floor: the old cos^0.7 fade left them at ~30%,
+    // invisible): full strength, a short fade only at extreme grazing where they would alias
+    const float LineFade = bAdaptive ? smoothstep(0.03, 0.15, pow(cos_theta, 1.0 / fade_power)) : cos_theta;
+    LineCov = grid * LineFade * LineColor.a * (1.0 - clamp(3.0 * max(max(axis_x_alpha, axis_z_alpha), max(arrow_x, arrow_z)), 0.0, 1.0));
     if (!bAdaptive) L = Over(L, HaloColor,      halo * cos_theta * uniforms.LineHalo);
     if (!bAdaptive) L = Over(L, LineColor.rgb,  LineCov);
     L = Over(L, XAxisColor.rgb, axis_x_alpha * cos_theta * XAxisColor.a);
