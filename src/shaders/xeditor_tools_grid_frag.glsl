@@ -371,11 +371,12 @@ void main()
         const vec3  Under   = uniforms.UnderColor.w > 0.5 ? uniforms.UnderColor.rgb : texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
         const vec3  FillLin = BaseColor.rgb * BaseColor.rgb;
         const vec3  FillDsp = linearToSrgb(ToneMapper_lion((FillLin - FillLin * t) * Shadow + FillLin * t));
-        // The brightness wraps, not each channel (Tomas 08:02Z: a near-white floor gave yellow lines when only its blue wrapped): one shift for
-        // all three channels keeps the ground's hue
+        // The colour's magnitude wraps and the colour is scaled to it (Tomas 08:11Z: "fmod the magnitude of the color vector then set back the
+        // magnitude"): hue and saturation kept; a per-channel wrap turned a near-white floor's lines yellow (08:02Z). Magnitude |c| / sqrt(3): white is 1
         const vec3  Below   = mix(Under, FillDsp, uniforms.FillAlpha);
-        const float Y       = dot(Below, vec3(0.2126, 0.7152, 0.0722));
-        const vec3  Line    = clamp(Below + (fract(Y + uniforms.Adaptive) - Y), 0.0, 1.0);
+        const float Mag     = length(Below) * 0.57735;
+        const float NewMag  = fract(Mag + uniforms.Adaptive);
+        const vec3  Line    = Mag > 1e-3 ? clamp(Below * (NewMag / Mag), 0.0, 1.0) : vec3(NewMag);
         const float Ax      = DiffuseColor.a;
         const float A       = Ax + LineCov * (1.0 - Ax);
         out_Color = vec4((out_Color.rgb * Ax + Line * LineCov * (1.0 - Ax)) / max(A, 1e-5), A);
