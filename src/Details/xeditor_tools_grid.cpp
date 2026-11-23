@@ -28,7 +28,7 @@ namespace xeditor_tools
         float           m_Rise         = 0.0f;      // grid::m_Rise
         float           m_JitterPx[2]  = { 0, 0 };
         float           m_LineHalo     = 0.0f;
-        float           m_Adaptive     = 0.0f;      // 1: the lines read SamplerUnder (grid::m_bAdaptiveLines)
+        float           m_Adaptive     = 0.0f;      // > 0: the lines read SamplerUnder, + this wrapped (grid::m_LineContrast)
     };
 
     bool grid::Ok(xgpu::device::error* pErr) noexcept
@@ -178,7 +178,7 @@ namespace xeditor_tools
         Uniform.m_FillAlpha    = std::clamp(m_FillAlpha, 0.0f, 1.0f);
         Uniform.m_Rise         = m_Rise;
         Uniform.m_LineHalo     = std::clamp(m_LineHalo, 0.0f, 1.0f);
-        Uniform.m_Adaptive     = Pass == 1 && bUnder ? float(std::clamp(m_AdaptiveMode, 0, 2)) : 0.0f;
+        Uniform.m_Adaptive     = Pass == 1 && bUnder ? std::clamp(m_LineContrast, 0.01f, 0.5f) : 0.0f;
         Uniform.m_JitterPx[0]  = JitterPx.m_X; Uniform.m_JitterPx[1] = JitterPx.m_Y;
         Uniform.m_WorldSpaceCameraPos = CameraPos;
         Uniform.m_L2W          = xmath::fmat4(xmath::fvec3(100.f, 100.0f, 1.f), xmath::radian3(-90_xdeg, 0_xdeg, 0_xdeg), xmath::fvec3(0, YOffset, 0));

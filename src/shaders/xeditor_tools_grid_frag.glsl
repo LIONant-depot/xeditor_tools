@@ -42,7 +42,7 @@ layout(set = 2, binding = 0) uniform Uniforms
     float   Rise;               // metres: the lines are depth-tested as the plane Rise above, the fill as Rise below (grid.cpp)
     vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
     float   LineHalo;           // 0..1: the light outline around the dark lines (seen on surfaces of the lines' own colour)
-    float   Adaptive;           // 1: the lines are dark on light pixels and light on dark ones, read from SamplerUnder (Tomas 2026-11-23, option A)
+    float   Adaptive;           // > 0: the lines are what they draw over + this, wrapped (SamplerUnder; grid::m_LineContrast); 0: the fixed grey lines (Tomas 2026-11-23)
 } uniforms;
 
 layout(location = 0) in vec2 inUV;
@@ -268,7 +268,7 @@ vec4 Grid(out float LineCov)  // LineCov: the plain lines' coverage (adaptive: m
     // the old mix(BaseColor, ...) chain, so a FillAlpha of 1 looks as before)
     cos_theta = pow(cos_theta, fade_power);
     vec4 L = vec4(0);
-    const bool bAdaptive = uniforms.Adaptive > 0.5;
+    const bool bAdaptive = uniforms.Adaptive > 0.0;
     // The axes and their arrows are never overdrawn by a line (Tomas 2026-11-23 06:49Z): no line where any of them is
     LineCov = grid * cos_theta * LineColor.a * (1.0 - clamp(3.0 * max(max(axis_x_alpha, axis_z_alpha), max(arrow_x, arrow_z)), 0.0, 1.0));
     if (!bAdaptive) L = Over(L, HaloColor,      halo * cos_theta * uniforms.LineHalo);
@@ -343,7 +343,7 @@ void main()
     const bool  bFill           = uniforms.Pass < 0.5;
     float       LineCov         = 0.0;
     const vec4  DiffuseColor    = bFill ? vec4(BaseColor.rgb * BaseColor.rgb, uniforms.FillAlpha) : Grid(LineCov);
-    const bool  bAdaptiveLines  = !bFill && uniforms.Adaptive > 0.5;
+    const bool  bAdaptiveLines  = !bFill && uniforms.Adaptive > 0.0;
     if (DiffuseColor.a <= 0.002 && !(bAdaptiveLines && LineCov > 0.002)) discard;
     // w must be checked BEFORE the divide, not after (SampleShadowTexture's own Coord.w>0.0 check
     // runs on the already-normalized Coord.w, which is always 1.0 post-divide regardless of the
@@ -359,35 +359,17 @@ void main()
     out_Color.rgb = linearToSrgb(out_Color.rgb);
     out_Color.a = DiffuseColor.a;
 
-    // Adaptive lines (option A, Tomas 2026-11-23): the line is what it is drawn over (the scene, SamplerUnder, copied before the overlays, under
-    // the fill at FillAlpha) made a fixed step darker on light ground and lighter on dark ground, its hue kept: always seen, never harsh
-    // (06:49Z: "we do not want to maximize contrast... the aliased noise will be crazy... look good and professional"). Which way it goes is
-    // read from the ground around the pixel (5 taps, 4 px apart), not the pixel itself: textures under the grid do not flip it pixel by
-    // pixel; it changes only along broad edges of light and dark. Any blend of the pixel below alone vanishes on some colour; this does not
+    // Adaptive lines (Tomas 2026-11-23: option A, then "a + with a mod 1", 07:58Z "mode 2 is better"): the line is what it is drawn over (the
+    // scene, SamplerUnder, copied before the overlays, under the fill at FillAlpha) plus a step, wrapped: fract(ground + Adaptive). Its
+    // difference from the ground is Adaptive or 1 - Adaptive in every channel, so it is seen on any colour; where the sum wraps the line
+    // jumps from light to dark. Any blend of the pixel below that never wraps vanishes on some colour (a continuous one faded on the mid-grey
+    // floors). Adaptive is grid::m_LineContrast
     if (bAdaptiveLines)
     {
-        const ivec2 P       = ivec2(gl_FragCoord.xy), M = textureSize(SamplerUnder, 0) - 1;
-        const vec3  Under   = texelFetch(SamplerUnder, P, 0).rgb;
-        vec3        Around  = Under;
-        Around += texelFetch(SamplerUnder, clamp(P + ivec2( 4,  4), ivec2(0), M), 0).rgb;
-        Around += texelFetch(SamplerUnder, clamp(P + ivec2(-4,  4), ivec2(0), M), 0).rgb;
-        Around += texelFetch(SamplerUnder, clamp(P + ivec2( 4, -4), ivec2(0), M), 0).rgb;
-        Around += texelFetch(SamplerUnder, clamp(P + ivec2(-4, -4), ivec2(0), M), 0).rgb;
+        const vec3  Under   = texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
         const vec3  FillLin = BaseColor.rgb * BaseColor.rgb;
         const vec3  FillDsp = linearToSrgb(ToneMapper_lion((FillLin - FillLin * t) * Shadow + FillLin * t));
-        const vec3  Below   = mix(Under,       FillDsp, uniforms.FillAlpha);
-        const vec3  Ground  = mix(Around / 5.0, FillDsp, uniforms.FillAlpha);
-        const vec3  W       = vec3(0.2126, 0.7152, 0.0722);
-        const float Step    = 0.22;                                 // the line's brightness step from its ground (display values)
-        const float Y       = max(dot(Below, W), 1e-3);
-        // Not two colours (Tomas 07:24Z): a continuous function of the ground. Darker over light ground, lighter over dark ground, blending
-        // between the two around mid grey; there the brightness step fades, and a cool tint takes over, so the line never equals what is under it
-        const float S       = clamp((0.5 - dot(Ground, W)) / 0.15, -1.0, 1.0);             // +1 dark ground (lighter line) .. -1 light ground
-        const vec3  Darker  = Below * max(1.0 - Step / Y, 0.0);                             // same hue
-        const vec3  Lighter = Below + (1.0 - Below) * min(Step / max(1.0 - Y, 1e-3), 1.0);  // same hue
-        const vec3  Smooth  = clamp(mix(Darker, Lighter, S * 0.5 + 0.5) + (1.0 - abs(S)) * vec3(-0.05, 0.02, 0.14), 0.0, 1.0);
-        const vec3  Wrapped = fract(Below + 0.3);                                         // mode 2 (Tomas 07:26Z: "a + with a mod 1"): contrast 0.3 everywhere, a jump where it wraps
-        const vec3  Line    = uniforms.Adaptive > 1.5 ? Wrapped : Smooth;
+        const vec3  Line    = fract(mix(Under, FillDsp, uniforms.FillAlpha) + uniforms.Adaptive);
         const float Ax      = DiffuseColor.a;
         const float A       = Ax + LineCov * (1.0 - Ax);
         out_Color = vec4((out_Color.rgb * Ax + Line * LineCov * (1.0 - Ax)) / max(A, 1e-5), A);

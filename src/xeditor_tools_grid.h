@@ -27,7 +27,7 @@ namespace xeditor_tools
         float               m_FillAlpha     = 0.57f;    // the grey fill's opacity: 0 shows what is below the ground, the lines stay
         float               m_LineHalo      = 0.11f;    // 0..1: a light outline around the dark lines, so they read on surfaces of their own colour;
                                                         // defaults (fill .57, outline .11, 1.3 cm): Tomas 2026-11-19 14:00Z, his tuned values
-        int                 m_AdaptiveMode   = 1;       // 1 continuous, 2 the ground + a step, wrapped (mod 1: Tomas 07:26Z), 0 off; only with m_bAdaptiveLines
+        float               m_LineContrast   = 0.2f;    // the adaptive lines: what they draw over + this, wrapped (fract): they differ from it by this or 1 - this
         bool                m_bAdaptiveLines = true;    // with what the lines draw over (Draw's pUnder): dark lines on light pixels, light on dark ones
                                                         // (Tomas 2026-11-23, option A: the lines are seen on any colour); off: the fixed grey lines + LineHalo
         float               m_Rise          = 0.013f;   // metres: a surface this close to the plane counts as on it (lines shown, fill hidden); a floor saved
