@@ -43,6 +43,8 @@ layout(set = 2, binding = 0) uniform Uniforms
     vec2    JitterPx;           // the TAA jitter (pixels) the scene's depth was drawn with: the fragment shader matches its depth to it
     float   LineHalo;           // 0..1: the light outline around the dark lines (seen on surfaces of the lines' own colour)
     float   Adaptive;           // > 0: the lines are what they draw over + this, wrapped (SamplerUnder; grid::m_LineContrast); 0: the fixed grey lines (Tomas 2026-11-23)
+    float   Pad;
+    vec4    UnderColor;         // w = 1: what the lines draw over is this plain colour (a preview's background), not SamplerUnder
 } uniforms;
 
 layout(location = 0) in vec2 inUV;
@@ -366,7 +368,7 @@ void main()
     // floors). Adaptive is grid::m_LineContrast
     if (bAdaptiveLines)
     {
-        const vec3  Under   = texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
+        const vec3  Under   = uniforms.UnderColor.w > 0.5 ? uniforms.UnderColor.rgb : texelFetch(SamplerUnder, ivec2(gl_FragCoord.xy), 0).rgb;
         const vec3  FillLin = BaseColor.rgb * BaseColor.rgb;
         const vec3  FillDsp = linearToSrgb(ToneMapper_lion((FillLin - FillLin * t) * Shadow + FillLin * t));
         const vec3  Line    = fract(mix(Under, FillDsp, uniforms.FillAlpha) + uniforms.Adaptive);

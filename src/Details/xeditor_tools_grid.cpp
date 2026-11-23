@@ -29,7 +29,11 @@ namespace xeditor_tools
         float           m_JitterPx[2]  = { 0, 0 };
         float           m_LineHalo     = 0.0f;
         float           m_Adaptive     = 0.0f;      // > 0: the lines read SamplerUnder, + this wrapped (grid::m_LineContrast)
+        float           m_Pad[4]       = { 0, 0, 0, 0 };   // (std140: the vec4 below starts at 256)
+        float           m_UnderColor[4] = { 0, 0, 0, 0 };   // a = 1: the lines draw over this plain colour instead of SamplerUnder
     };
+
+    static_assert(offsetof(grid_uniform, m_UnderColor) == 256, "grid_uniform must match the shader's std140 block (UnderColor at 256)");
 
     bool grid::Ok(xgpu::device::error* pErr) noexcept
     {
@@ -165,6 +169,7 @@ namespace xeditor_tools
             m_pUnderKey = Ok(m_pDevice->Create(m_UnderInstance, { .m_PipeLine = m_GridPipeline[1], .m_SamplersBindings = Bindings })) ? static_cast<const void*>(pUnder->m_Private.get()) : nullptr;
         }
         const bool bUnder = bAdaptive && m_pUnderKey == pUnder->m_Private.get();
+        const bool bPlain = m_bAdaptiveLines && !bUnder;       // no image of what is under: the previews' plain background (m_Under*)
         if (CameraPos.m_Y < YOffset) return;        // front face only: from below the ground there is no grid (Tomas 2026-11-16)
 
         for (int Pass = 0; Pass < 2; ++Pass)        // the fill (behind the plane), then the lines (in front of it): see Init
@@ -178,7 +183,8 @@ namespace xeditor_tools
         Uniform.m_FillAlpha    = std::clamp(m_FillAlpha, 0.0f, 1.0f);
         Uniform.m_Rise         = m_Rise;
         Uniform.m_LineHalo     = std::clamp(m_LineHalo, 0.0f, 1.0f);
-        Uniform.m_Adaptive     = Pass == 1 && bUnder ? std::clamp(m_LineContrast, 0.01f, 0.5f) : 0.0f;
+        Uniform.m_Adaptive     = Pass == 1 && (bUnder || bPlain) ? std::clamp(m_LineContrast, 0.01f, 0.5f) : 0.0f;
+        Uniform.m_UnderColor[0] = m_UnderR; Uniform.m_UnderColor[1] = m_UnderG; Uniform.m_UnderColor[2] = m_UnderB; Uniform.m_UnderColor[3] = bPlain ? 1.0f : 0.0f;
         Uniform.m_JitterPx[0]  = JitterPx.m_X; Uniform.m_JitterPx[1] = JitterPx.m_Y;
         Uniform.m_WorldSpaceCameraPos = CameraPos;
         Uniform.m_L2W          = xmath::fmat4(xmath::fvec3(100.f, 100.0f, 1.f), xmath::radian3(-90_xdeg, 0_xdeg, 0_xdeg), xmath::fvec3(0, YOffset, 0));
