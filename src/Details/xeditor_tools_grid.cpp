@@ -157,7 +157,7 @@ namespace xeditor_tools
         m_pDevice->Destroy(std::move(m_White));
     }
 
-    void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset, xmath::fvec2 JitterPx, const xgpu::texture* pUnder) noexcept
+    void grid::Draw(xgpu::cmd_buffer& CmdBuffer, const xmath::fmat4& W2C, const xmath::fvec3& CameraPos, const xmath::fmat4& ShadowL2C, float YOffset, xmath::fvec2 JitterPx, const xgpu::texture* pUnder, int PassMask) noexcept
     {
         if (!m_bReady) return;
         // The lines' pipeline with what they draw over bound (only the lines read it); made again when it is another image (a resized view)
@@ -175,6 +175,7 @@ namespace xeditor_tools
         for (int Pass = 0; Pass < 2; ++Pass)        // the fill (behind the plane), then the lines (in front of it): see Init
         {
         if (Pass == 0 && m_FillAlpha <= 0.0f) continue;
+        if (!(PassMask & (1 << Pass))) continue;
         CmdBuffer.setPipelineInstance(Pass == 1 && bUnder ? m_UnderInstance : m_GridInstance[Pass]);
         CmdBuffer.setBuffer(m_GridIndices);
         CmdBuffer.setBuffer(m_GridVerts);
