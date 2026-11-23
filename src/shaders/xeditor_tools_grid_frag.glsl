@@ -380,8 +380,12 @@ void main()
         const vec3  W       = vec3(0.2126, 0.7152, 0.0722);
         const float Step    = 0.22;                                 // the line's brightness step from its ground (display values)
         const float Y       = max(dot(Below, W), 1e-3);
-        const vec3  Line    = dot(Ground, W) > 0.5 ? Below * max(1.0 - Step / Y, 0.0)                       // darker, same hue
-                                                   : Below + (1.0 - Below) * min(Step / max(1.0 - Y, 1e-3), 1.0);  // lighter, same hue
+        // Not two colours (Tomas 07:24Z): a continuous function of the ground. Darker over light ground, lighter over dark ground, blending
+        // between the two around mid grey; there the brightness step fades, and a cool tint takes over, so the line never equals what is under it
+        const float S       = clamp((0.5 - dot(Ground, W)) / 0.15, -1.0, 1.0);             // +1 dark ground (lighter line) .. -1 light ground
+        const vec3  Darker  = Below * max(1.0 - Step / Y, 0.0);                             // same hue
+        const vec3  Lighter = Below + (1.0 - Below) * min(Step / max(1.0 - Y, 1e-3), 1.0);  // same hue
+        const vec3  Line    = clamp(mix(Darker, Lighter, S * 0.5 + 0.5) + (1.0 - abs(S)) * vec3(-0.05, 0.02, 0.14), 0.0, 1.0);
         const float Ax      = DiffuseColor.a;
         const float A       = Ax + LineCov * (1.0 - Ax);
         out_Color = vec4((out_Color.rgb * Ax + Line * LineCov * (1.0 - Ax)) / max(A, 1e-5), A);
